@@ -1,9 +1,9 @@
+import csv
 import threading
 import time
 from io import StringIO
 from pathlib import Path
 from typing import Optional
-import csv
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import FastAPI, HTTPException, Query
@@ -18,7 +18,8 @@ from app.db.database import get_conn
 from app.db.migrate import run_migrations
 from app.db.models import init_db
 from app.jobs.auto_delete import run_auto_delete
-from app.scanner.scan import scan_folder
+from app.scanner.scan import scan_folder, scan_folder_files
+from app.scanner.scan_pc import iter_pc_images
 from app.scanner.thumbnail import make_thumbnail
 from app.settings import load_settings, save_settings
 
@@ -44,6 +45,9 @@ class SettingsRequest(BaseModel):
     gpu_enabled: bool
     explicit_threshold: float
     borderline_threshold: float
+    custom_skip_folders: list[str] = []
+    auto_delete_days: int = 30
+    theme: str = "dark"
 
 
 _scan_status = {
@@ -53,7 +57,64 @@ _scan_status = {
     "flagged": 0,
     "current_file": "",
 }
+_scan_lock = threading.Lock()
+_cancel_event = threading.Event()
 _scheduler: BackgroundScheduler | None = None
+
+
+def _update_scan_status(**kwargs):
+    with _scan_lock:
+        _scan_status.update(kwargs)
+
+
+def _get_scan_status():
+    with _scan_lock:
+        return dict(_scan_status)
+
+
+def _create_session(folder: str) -> int:
+    conn = get_conn()
+    session = conn.execute(
+        "INSERT INTO scan_sessions (folder, started_at, status) VALUES (?, ?, 'running')",
+        (folder, int(time.time())),
+    )
+    conn.commit()
+    return session.lastrowid
+
+
+def _mark_session_failed(session_id: int):
+    conn = get_conn()
+    conn.execute(
+        "UPDATE scan_sessions SET ended_at=?, status='failed' WHERE id=?",
+        (int(time.time()), session_id),
+    )
+    conn.commit()
+
+
+def _start_background_scan(session_id: int, runner):
+    def run():
+        try:
+            _update_scan_status(
+                running=True,
+                progress=0,
+                total=0,
+                flagged=0,
+                current_file="",
+            )
+            result = runner()
+            _update_scan_status(
+                running=False,
+                progress=100 if result["status"] == "done" else _get_scan_status()["progress"],
+                total=result["total"],
+                flagged=result["flagged"],
+                current_file="",
+            )
+        except Exception:
+            _mark_session_failed(session_id)
+            _update_scan_status(running=False, current_file="")
+            raise
+
+    threading.Thread(target=run, daemon=True).start()
 
 
 @app.on_event("startup")
@@ -67,7 +128,11 @@ def on_startup():
 
     if _scheduler is None:
         _scheduler = BackgroundScheduler()
-        _scheduler.add_job(run_auto_delete, "interval", hours=24)
+        _scheduler.add_job(
+            lambda: run_auto_delete(load_settings().get("auto_delete_days", 30)),
+            "interval",
+            hours=24,
+        )
         _scheduler.start()
 
 
@@ -100,53 +165,102 @@ def start_scan(req: ScanRequest):
     if not target.exists() or not target.is_dir():
         raise HTTPException(status_code=400, detail="Invalid directory path")
 
-    if _scan_status["running"]:
-        raise HTTPException(status_code=409, detail="Scan already in progress")
+    with _scan_lock:
+        if _scan_status["running"]:
+            raise HTTPException(status_code=409, detail="Scan already in progress")
+        _cancel_event.clear()
 
-    conn = get_conn()
-    session = conn.execute(
-        "INSERT INTO scan_sessions (folder, started_at, status) VALUES (?, ?, 'running')",
-        (str(target), int(time.time())),
-    )
-    conn.commit()
-    session_id = session.lastrowid
+    session_id = _create_session(str(target))
 
     def update_progress(index: int, total: int, flagged: int, current_file: str = ""):
         progress = int((index / total) * 100) if total else 100
-        _scan_status.update(
-            {
-                "running": True,
-                "progress": progress,
-                "total": total,
-                "flagged": flagged,
-                "current_file": current_file,
-            }
+        _update_scan_status(
+            running=True,
+            progress=progress,
+            total=total,
+            flagged=flagged,
+            current_file=current_file,
         )
 
-    def run():
-        try:
-            _scan_status.update(
-                {"running": True, "progress": 0, "total": 0, "flagged": 0, "current_file": ""}
-            )
-            result = scan_folder(target, session_id=session_id, progress_callback=update_progress)
-            _scan_status.update({"running": False, "progress": 100, "current_file": "", **result})
-        except Exception:
-            failed_conn = get_conn()
-            failed_conn.execute(
-                "UPDATE scan_sessions SET ended_at=?, status='failed' WHERE id=?",
-                (int(time.time()), session_id),
-            )
-            failed_conn.commit()
-            _scan_status.update({"running": False, "current_file": ""})
-            raise
-
-    threading.Thread(target=run, daemon=True).start()
+    _start_background_scan(
+        session_id,
+        lambda: scan_folder(
+            target,
+            session_id=session_id,
+            progress_callback=update_progress,
+            cancel_event=_cancel_event,
+        ),
+    )
     return {"status": "started", "session_id": session_id}
+
+
+@app.post("/scan/pc")
+def start_pc_scan():
+    with _scan_lock:
+        if _scan_status["running"]:
+            raise HTTPException(status_code=409, detail="Scan already in progress")
+        _cancel_event.clear()
+
+    settings = load_settings()
+    session_id = _create_session("This PC")
+
+    def run_pc_scan():
+        _update_scan_status(
+            running=True,
+            progress=0,
+            total=0,
+            flagged=0,
+            current_file="Discovering files",
+        )
+        files = iter_pc_images(
+            custom_skip_folders=settings.get("custom_skip_folders", []),
+            cancel_event=_cancel_event,
+        )
+        if _cancel_event.is_set():
+            conn = get_conn()
+            conn.execute(
+                "UPDATE scan_sessions SET ended_at=?, total=?, flagged=?, status='cancelled' WHERE id=?",
+                (int(time.time()), len(files), 0, session_id),
+            )
+            conn.commit()
+            return {"total": len(files), "flagged": 0, "status": "cancelled"}
+
+        def update_progress(index: int, total: int, flagged: int, current_file: str = ""):
+            progress = int((index / total) * 100) if total else 100
+            _update_scan_status(
+                running=True,
+                progress=progress,
+                total=total,
+                flagged=flagged,
+                current_file=current_file,
+            )
+
+        return scan_folder_files(
+            Path.home(),
+            files,
+            session_id=session_id,
+            progress_callback=update_progress,
+            cancel_event=_cancel_event,
+            explicit_threshold=settings.get("explicit_threshold", 0.6),
+            borderline_threshold=settings.get("borderline_threshold", 0.4),
+        )
+
+    _start_background_scan(session_id, run_pc_scan)
+    return {"status": "started", "session_id": session_id}
+
+
+@app.post("/scan/cancel")
+def cancel_scan():
+    if not _get_scan_status()["running"]:
+        raise HTTPException(status_code=409, detail="No scan is running")
+    _cancel_event.set()
+    _update_scan_status(current_file="Cancelling...")
+    return {"status": "cancelling"}
 
 
 @app.get("/scan/status")
 def scan_status():
-    return _scan_status
+    return _get_scan_status()
 
 
 @app.get("/results")
@@ -335,7 +449,7 @@ def delete_files(req: ActionRequest):
 
 @app.delete("/quarantine/expired")
 def trigger_auto_delete():
-    count = run_auto_delete()
+    count = run_auto_delete(load_settings().get("auto_delete_days", 30))
     return {"deleted": count}
 
 
@@ -393,9 +507,26 @@ def get_stats():
 def get_folders():
     conn = get_conn()
     rows = conn.execute(
-        "SELECT DISTINCT folder, COUNT(*) as cnt FROM files GROUP BY folder"
+        """
+        SELECT f.folder,
+               COUNT(*) as cnt,
+               SUM(CASE WHEN lr.decision != 'safe' THEN 1 ELSE 0 END) as flagged,
+               MAX(f.last_scanned_at) as last_scanned
+        FROM files f
+        LEFT JOIN (
+            SELECT r1.file_id, r1.decision
+            FROM results r1
+            JOIN (
+                SELECT file_id, MAX(created_at) AS created_at
+                FROM results
+                GROUP BY file_id
+            ) latest ON latest.file_id = r1.file_id AND latest.created_at = r1.created_at
+        ) lr ON lr.file_id = f.id
+        GROUP BY f.folder
+        ORDER BY last_scanned DESC
+        """
     ).fetchall()
-    return [{"folder": row[0], "count": row[1]} for row in rows]
+    return [{"folder": row[0], "count": row[1], "flagged": row[2], "last_scanned": row[3]} for row in rows]
 
 
 @app.get("/sessions")
@@ -424,14 +555,63 @@ def get_sessions(limit: int = Query(20)):
     ]
 
 
+@app.get("/sessions/{session_id}/results")
+def get_session_results(session_id: int):
+    conn = get_conn()
+    session = conn.execute(
+        "SELECT started_at, ended_at FROM scan_sessions WHERE id = ?",
+        (session_id,),
+    ).fetchone()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    started_at, ended_at = session
+    rows = conn.execute(
+        """
+        SELECT f.id, f.path, f.folder, f.status, f.quarantined_at,
+               r.decision, r.score, r.classes, r.created_at
+        FROM results r
+        JOIN files f ON f.id = r.file_id
+        WHERE r.decision != 'safe'
+          AND r.created_at BETWEEN ? AND ?
+        ORDER BY r.score DESC
+        """,
+        (started_at, ended_at or int(time.time())),
+    ).fetchall()
+    return [
+        {
+            "id": row[0],
+            "path": row[1],
+            "folder": row[2],
+            "status": row[3],
+            "quarantined_at": row[4],
+            "decision": row[5],
+            "score": row[6],
+            "classes": row[7],
+            "created_at": row[8],
+        }
+        for row in rows
+    ]
+
+
 @app.get("/export/csv")
-def export_csv(status: Optional[str] = Query(None)):
+def export_csv(
+    status: Optional[str] = Query(None),
+    decision: Optional[str] = Query(None),
+    folder: Optional[str] = Query(None),
+):
     conn = get_conn()
     filters = []
     params: list[object] = []
     if status:
         filters.append("f.status = ?")
         params.append(status)
+    if decision:
+        filters.append("r.decision = ?")
+        params.append(decision)
+    if folder:
+        filters.append("f.folder = ?")
+        params.append(folder)
 
     where = f"WHERE {' AND '.join(filters)}" if filters else ""
     rows = conn.execute(

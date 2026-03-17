@@ -1,13 +1,17 @@
+import { Link } from "react-router-dom";
+
 export function StatPill({
   label,
   value,
   color,
+  to,
 }: {
   label: string;
   value: number;
   color: string;
+  to?: string;
 }) {
-  return (
+  const content = (
     <div
       className="flex items-center gap-3 rounded px-4 py-3"
       style={{ background: "var(--bg-1)", border: "1px solid var(--line)" }}
@@ -21,4 +25,10 @@ export function StatPill({
       </span>
     </div>
   );
+
+  if (!to) {
+    return content;
+  }
+
+  return <Link to={to}>{content}</Link>;
 }

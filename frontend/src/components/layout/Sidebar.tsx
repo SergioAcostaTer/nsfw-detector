@@ -1,63 +1,89 @@
-import { useState } from "react";
-import { Archive, ImageIcon, LayoutDashboard, ScanLine, Settings, Shield } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { Activity, Archive, ImageIcon, LayoutDashboard, ScanLine, Settings, Shield } from "lucide-react";
 import { NavLink } from "react-router-dom";
+
+import { getResultsCount, getStats } from "@/api/client";
 
 const links = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
   { to: "/scan", icon: ScanLine, label: "Scan" },
   { to: "/review", icon: ImageIcon, label: "Review" },
   { to: "/quarantine", icon: Archive, label: "Quarantine" },
+  { to: "/activity", icon: Activity, label: "Activity" },
   { to: "/settings", icon: Settings, label: "Settings" },
 ];
 
 export function Sidebar() {
-  const [expanded, setExpanded] = useState(false);
+  const { data: counts } = useQuery({
+    queryKey: ["resultsCount"],
+    queryFn: () => getResultsCount().then((response) => response.data),
+  });
+  const { data: stats } = useQuery({
+    queryKey: ["stats"],
+    queryFn: () => getStats().then((response) => response.data),
+  });
+
+  const reviewCount = (counts?.explicit ?? 0) + (counts?.borderline ?? 0);
 
   return (
     <aside
-      onMouseEnter={() => setExpanded(true)}
-      onMouseLeave={() => setExpanded(false)}
-      className="fixed inset-y-0 left-0 z-20 flex flex-col transition-all duration-200"
-      style={{
-        width: expanded ? "176px" : "48px",
-        background: "var(--bg-1)",
-        borderRight: "1px solid var(--line)",
-        overflow: "hidden",
-      }}
+      className="fixed inset-y-0 left-0 z-40 flex w-[220px] flex-col border-r px-4 py-5"
+      style={{ background: "var(--bg-1)", borderColor: "var(--line)" }}
     >
-      <div className="flex h-12 shrink-0 items-center justify-center" style={{ borderBottom: "1px solid var(--line)" }}>
-        <Shield size={16} style={{ color: "var(--blue)", flexShrink: 0 }} />
+      <div className="mb-8 flex items-center gap-3">
+        <div
+          className="flex h-10 w-10 items-center justify-center rounded-2xl"
+          style={{ background: "linear-gradient(135deg, rgba(59,130,246,0.24), rgba(34,197,94,0.18))" }}
+        >
+          <Shield size={18} style={{ color: "var(--blue)" }} />
+        </div>
+        <div>
+          <p className="text-sm font-semibold">NSFW Scanner</p>
+          <p className="text-xs" style={{ color: "var(--ink-2)" }}>
+            Desktop control panel
+          </p>
+        </div>
       </div>
 
-      <nav className="flex flex-1 flex-col gap-0.5 p-1.5">
-        {links.map(({ to, icon: Icon, label }) => (
-          <NavLink
-            key={to}
-            to={to}
-            end={to === "/"}
-            className={({ isActive }) =>
-              `flex items-center gap-2.5 whitespace-nowrap rounded px-2.5 py-2 transition-colors ${
-                isActive ? "" : "hover:bg-white/5"
-              }`
-            }
-            style={({ isActive }) => ({
-              background: isActive ? "var(--blue-dim)" : undefined,
-              color: isActive ? "var(--blue)" : "var(--ink-2)",
-            })}
-          >
-            <Icon size={15} style={{ flexShrink: 0 }} />
-            <span className="text-xs font-medium transition-opacity duration-150" style={{ opacity: expanded ? 1 : 0 }}>
-              {label}
-            </span>
-          </NavLink>
-        ))}
+      <nav className="space-y-1">
+        {links.map(({ to, icon: Icon, label }) => {
+          const badge = to === "/review" ? reviewCount : to === "/quarantine" ? stats?.quarantined ?? 0 : null;
+          return (
+            <NavLink
+              key={to}
+              to={to}
+              end={to === "/"}
+              className={({ isActive }) =>
+                `flex items-center gap-3 rounded-2xl px-3 py-2.5 text-sm transition-colors ${isActive ? "" : "hover:bg-white/5"}`
+              }
+              style={({ isActive }) => ({
+                background: isActive ? "var(--bg-2)" : "transparent",
+                color: isActive ? "var(--ink-1)" : "var(--ink-2)",
+              })}
+            >
+              <Icon size={16} />
+              <span className="flex-1">{label}</span>
+              {badge ? (
+                <span
+                  className="rounded-full px-2 py-0.5 text-[11px]"
+                  style={{ background: "var(--bg-3)", color: "var(--ink-1)" }}
+                >
+                  {badge}
+                </span>
+              ) : null}
+            </NavLink>
+          );
+        })}
       </nav>
 
       <div
-        className="overflow-hidden whitespace-nowrap px-2.5 py-3 text-xs transition-opacity"
-        style={{ color: "var(--ink-3)", opacity: expanded ? 1 : 0 }}
+        className="mt-auto rounded-2xl border px-4 py-3 text-xs"
+        style={{ borderColor: "var(--line)", background: "var(--bg-2)", color: "var(--ink-2)" }}
       >
-        v2.0 · local
+        <p className="font-medium" style={{ color: "var(--ink-1)" }}>
+          Local mode
+        </p>
+        <p className="mt-1">220px fixed navigation, no hidden labels, no remote sync.</p>
       </div>
     </aside>
   );

@@ -8,6 +8,9 @@ DEFAULT_SETTINGS = {
     "gpu_enabled": True,
     "explicit_threshold": 0.6,
     "borderline_threshold": 0.4,
+    "custom_skip_folders": [],
+    "auto_delete_days": 30,
+    "theme": "dark",
 }
 
 

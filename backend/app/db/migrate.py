@@ -1,3 +1,6 @@
+import sqlite3
+
+
 def run_migrations(conn):
     existing_cols = [row[1] for row in conn.execute("PRAGMA table_info(files)").fetchall()]
     new_cols = {
@@ -7,8 +10,12 @@ def run_migrations(conn):
         "deleted_at": "INTEGER",
     }
     for col, definition in new_cols.items():
-        if col not in existing_cols:
+        if col in existing_cols:
+            continue
+        try:
             conn.execute(f"ALTER TABLE files ADD COLUMN {col} {definition}")
+        except sqlite3.OperationalError as exc:
+            print(f"Migration error adding files.{col}: {exc}")
 
     existing_tables = {
         row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()

@@ -1,5 +1,6 @@
 import time
 from pathlib import Path
+from threading import Event
 
 import cv2
 from tqdm import tqdm
@@ -7,31 +8,64 @@ from tqdm import tqdm
 from app.db.database import get_conn
 from app.db.models import init_db
 from app.scanner.decision import decide
-from app.scanner.detector import Detector
+from app.scanner.detector import get_detector
 from app.scanner.file_utils import hash_file, iter_image_files
+from app.settings import load_settings
 
 
-def scan_folder(folder: Path, session_id: int | None = None, progress_callback=None):
+def scan_folder(
+    folder: Path,
+    session_id: int | None = None,
+    progress_callback=None,
+    cancel_event: Event | None = None,
+):
+    settings = load_settings()
+    return scan_folder_files(
+        folder,
+        iter_image_files(folder),
+        session_id=session_id,
+        progress_callback=progress_callback,
+        cancel_event=cancel_event,
+        explicit_threshold=settings.get("explicit_threshold", 0.6),
+        borderline_threshold=settings.get("borderline_threshold", 0.4),
+    )
+
+
+def scan_folder_files(
+    folder: Path,
+    files: list[Path],
+    *,
+    session_id: int | None = None,
+    progress_callback=None,
+    cancel_event: Event | None = None,
+    explicit_threshold: float = 0.6,
+    borderline_threshold: float = 0.4,
+):
     conn = get_conn()
     init_db(conn)
-    detector = Detector()
-
-    files = iter_image_files(folder)
+    detector = get_detector()
     flagged = 0
+    status = "done"
 
     for index, path in enumerate(tqdm(files), start=1):
+        current_file = str(path.name)
         try:
+            if cancel_event and cancel_event.is_set():
+                status = "cancelled"
+                break
+
             existing_status = conn.execute(
                 "SELECT status, mtime FROM files WHERE path = ?", (str(path),)
             ).fetchone()
 
+            # Preserve quarantined and deleted records before touching the filesystem.
             if existing_status and existing_status[0] in ("quarantined", "deleted"):
                 if progress_callback:
                     progress_callback(
                         index=index,
                         total=len(files),
                         flagged=flagged,
-                        current_file=str(path.name),
+                        current_file=current_file,
                     )
                 continue
 
@@ -43,7 +77,7 @@ def scan_folder(folder: Path, session_id: int | None = None, progress_callback=N
                         index=index,
                         total=len(files),
                         flagged=flagged,
-                        current_file=str(path.name),
+                        current_file=current_file,
                     )
                 continue
 
@@ -54,13 +88,17 @@ def scan_folder(folder: Path, session_id: int | None = None, progress_callback=N
                         index=index,
                         total=len(files),
                         flagged=flagged,
-                        current_file=str(path.name),
+                        current_file=current_file,
                     )
                 continue
 
             file_hash = hash_file(path)
             detections = detector.detect(image)
-            decision, score = decide(detections)
+            decision, score = decide(
+                detections,
+                explicit_threshold=explicit_threshold,
+                borderline_threshold=borderline_threshold,
+            )
 
             conn.execute(
                 """
@@ -102,24 +140,31 @@ def scan_folder(folder: Path, session_id: int | None = None, progress_callback=N
 
         except Exception as exc:
             print(f"Error processing {path}: {exc}")
-        finally:
             if progress_callback:
                 progress_callback(
                     index=index,
                     total=len(files),
                     flagged=flagged,
-                    current_file=str(path.name),
+                    current_file=current_file,
+                )
+        else:
+            if progress_callback:
+                progress_callback(
+                    index=index,
+                    total=len(files),
+                    flagged=flagged,
+                    current_file=current_file,
                 )
 
     if session_id:
         conn.execute(
             """
             UPDATE scan_sessions
-            SET ended_at=?, total=?, flagged=?, status='done'
+            SET ended_at=?, total=?, flagged=?, status=?
             WHERE id=?
             """,
-            (int(time.time()), len(files), flagged, session_id),
+            (int(time.time()), len(files), flagged, status, session_id),
         )
 
     conn.commit()
-    return {"total": len(files), "flagged": flagged}
+    return {"total": len(files), "flagged": flagged, "status": status}

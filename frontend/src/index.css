@@ -5,19 +5,19 @@
 @tailwind utilities;
 
 :root {
-  --bg-0: #080909;
-  --bg-1: #0f1012;
-  --bg-2: #161719;
-  --bg-3: #1e2022;
-  --line: #232527;
-  --line-soft: #1a1c1e;
-  --ink-1: #f0f0f0;
-  --ink-2: #808080;
-  --ink-3: #484848;
+  --bg-0: #09111a;
+  --bg-1: #111b26;
+  --bg-2: #182431;
+  --bg-3: #223243;
+  --line: #2d4256;
+  --line-soft: #1d2b39;
+  --ink-1: #edf3f8;
+  --ink-2: #93a6b7;
+  --ink-3: #5f7386;
   --red: #f03e3e;
-  --amber: #e8a020;
+  --amber: #f59e0b;
   --green: #22c55e;
-  --violet: #7c5af0;
+  --violet: #0ea5e9;
   --blue: #3b82f6;
   --red-dim: rgba(240, 62, 62, 0.1);
   --amber-dim: rgba(232, 160, 32, 0.1);
@@ -31,15 +31,15 @@
 }
 
 html.light {
-  --bg-0: #f5f5f4;
+  --bg-0: #f3efe8;
   --bg-1: #ffffff;
-  --bg-2: #f0eeec;
-  --bg-3: #e8e5e2;
-  --line: #e2deda;
-  --line-soft: #eae7e4;
-  --ink-1: #1a1917;
-  --ink-2: #78716c;
-  --ink-3: #a8a29e;
+  --bg-2: #f7f0e6;
+  --bg-3: #efe2d0;
+  --line: #e5d7c7;
+  --line-soft: #efe7dc;
+  --ink-1: #241c15;
+  --ink-2: #7a6755;
+  --ink-3: #b89c84;
 }
 
 *,
@@ -56,7 +56,10 @@ body,
 
 body {
   margin: 0;
-  background: var(--bg-0);
+  background:
+    radial-gradient(circle at top left, rgba(59, 130, 246, 0.08), transparent 25%),
+    radial-gradient(circle at bottom right, rgba(14, 165, 233, 0.08), transparent 20%),
+    var(--bg-0);
   color: var(--ink-1);
   font-family: var(--font-ui);
   font-size: 14px;
@@ -91,4 +94,15 @@ img {
 :focus-visible {
   outline: 2px solid var(--blue);
   outline-offset: 2px;
+}
+
+@keyframes toast-slide {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }

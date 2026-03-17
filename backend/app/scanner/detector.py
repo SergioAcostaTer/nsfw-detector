@@ -5,6 +5,28 @@ import onnxruntime as ort
 from app.config import MODEL_PATH
 from app.settings import get_onnx_providers
 
+CLASS_MAP = {
+    0: "FEMALE_GENITALIA_COVERED",
+    1: "FACE_FEMALE",
+    2: "BUTTOCKS_EXPOSED",
+    3: "FEMALE_BREAST_EXPOSED",
+    4: "FEMALE_GENITALIA_EXPOSED",
+    5: "MALE_BREAST_EXPOSED",
+    6: "ANUS_EXPOSED",
+    7: "FEET_EXPOSED",
+    8: "BELLY_COVERED",
+    9: "FEET_COVERED",
+    10: "ARMPITS_COVERED",
+    11: "ARMPITS_EXPOSED",
+    12: "FACE_MALE",
+    13: "BELLY_EXPOSED",
+    14: "MALE_GENITALIA_EXPOSED",
+    15: "ANUS_COVERED",
+    16: "FEMALE_BREAST_COVERED",
+    17: "BUTTOCKS_COVERED",
+}
+_detector = None
+
 
 class Detector:
     def __init__(self):
@@ -24,20 +46,6 @@ class Detector:
         outputs = self.session.run(None, {self.input_name: input_tensor})
         preds = outputs[0]
 
-        class_map = {
-            0: "EXPOSED_ANUS",
-            1: "EXPOSED_ARMPITS",
-            2: "EXPOSED_BELLY",
-            3: "EXPOSED_BUTTOCKS",
-            4: "EXPOSED_FEET",
-            5: "EXPOSED_BREAST_F",
-            6: "EXPOSED_GENITALIA_F",
-            7: "EXPOSED_GENITALIA_M",
-            8: "EXPOSED_FACE",
-            9: "COVERED_BREAST_F",
-            10: "COVERED_GENITALIA_F",
-        }
-
         detections = []
         for pred in preds[0]:
             score = float(pred[4])
@@ -48,10 +56,17 @@ class Detector:
                 continue
 
             class_id = int(pred[5]) if len(pred) > 5 else -1
-            if class_id not in class_map:
+            if class_id not in CLASS_MAP:
                 print(f"Unknown class_id: {class_id}")
             detections.append(
-                {"class": class_map.get(class_id, "UNKNOWN"), "score": score}
+                {"class": CLASS_MAP.get(class_id, "UNKNOWN"), "score": score}
             )
 
         return detections
+
+
+def get_detector() -> Detector:
+    global _detector
+    if _detector is None:
+        _detector = Detector()
+    return _detector

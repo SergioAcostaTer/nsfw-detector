@@ -1,15 +1,22 @@
-import { Loader2, Play } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { Loader2, Play, Square } from "lucide-react";
 import type { DragEventHandler } from "react";
 import { useState } from "react";
 
-import { TopBar } from "@/components/layout/TopBar";
+import { getFolders, getSessions } from "@/api/client";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { FolderPicker } from "@/components/scan/FolderPicker";
+import { QuickFolders } from "@/components/scan/QuickFolders";
+import { ScanAllCard } from "@/components/scan/ScanAllCard";
 import { ScanProgress } from "@/components/scan/ScanProgress";
+import { EmptyState } from "@/components/ui";
 import { useScan } from "@/hooks/useScan";
 
 export function Scan() {
   const [folder, setFolder] = useState("");
-  const { start, status } = useScan(folder);
+  const { start, startPc, cancel, status } = useScan(folder);
+  const { data: folders } = useQuery({ queryKey: ["folders"], queryFn: () => getFolders().then((response) => response.data) });
+  const { data: sessions } = useQuery({ queryKey: ["sessions", 3], queryFn: () => getSessions(3).then((response) => response.data) });
 
   const onDrop: DragEventHandler<HTMLDivElement> = (event) => {
     event.preventDefault();
@@ -20,40 +27,56 @@ export function Scan() {
   };
 
   return (
-    <div className="max-w-2xl p-8">
-      <TopBar title="Start Scan" subtitle="Enter a folder path to scan for NSFW content" />
+    <div className="space-y-6">
+      <PageHeader title="Start Scan" subtitle="Run targeted folder scans or a full-machine discovery pass." />
+
+      <ScanAllCard onStart={() => startPc.mutate()} disabled={status.data?.running || startPc.isPending} />
 
       <div
-        className="mt-8 space-y-5 rounded-xl p-6"
-        style={{ background: "var(--bg-1)", border: "1px solid var(--line)" }}
+        className="space-y-5 rounded-3xl border p-6"
+        style={{ background: "var(--bg-1)", borderColor: "var(--line)" }}
         onDragOver={(event) => event.preventDefault()}
         onDrop={onDrop}
       >
         <FolderPicker value={folder} onChange={setFolder} />
+        <QuickFolders folders={(folders ?? []).slice(0, 8)} onPick={setFolder} />
 
         <div
-          className="rounded-lg border border-dashed px-4 py-3 text-sm"
+          className="rounded-2xl border border-dashed px-4 py-3 text-sm"
           style={{ borderColor: "var(--line)", color: "var(--ink-2)", background: "var(--bg-2)" }}
         >
           Drag a folder here if your browser exposes `File.path`; otherwise paste the folder path manually.
         </div>
 
-        <button
-          onClick={() => start.mutate()}
-          disabled={!folder || start.isPending || status.data?.running}
-          className="flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-medium transition-all disabled:opacity-40"
-          style={{ background: "var(--blue)", color: "#fff" }}
-        >
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={() => start.mutate()}
+            disabled={!folder || start.isPending || status.data?.running}
+            className="flex items-center gap-2 rounded-2xl px-5 py-3 text-sm font-medium transition-all disabled:opacity-40"
+            style={{ background: "var(--blue)", color: "#fff" }}
+          >
+            {status.data?.running ? (
+              <>
+                <Loader2 size={15} className="animate-spin" /> Scanning...
+              </>
+            ) : (
+              <>
+                <Play size={15} /> Start Folder Scan
+              </>
+            )}
+          </button>
+
           {status.data?.running ? (
-            <>
-              <Loader2 size={15} className="animate-spin" /> Scanning...
-            </>
-          ) : (
-            <>
-              <Play size={15} /> Start Scan
-            </>
-          )}
-        </button>
+            <button
+              onClick={() => cancel.mutate()}
+              disabled={cancel.isPending}
+              className="flex items-center gap-2 rounded-2xl px-5 py-3 text-sm font-medium"
+              style={{ background: "var(--red-dim)", color: "var(--red)" }}
+            >
+              <Square size={14} /> Cancel
+            </button>
+          ) : null}
+        </div>
 
         <ScanProgress
           running={status.data?.running}
@@ -62,6 +85,38 @@ export function Scan() {
           progress={status.data?.progress}
           currentFile={status.data?.current_file}
         />
+      </div>
+
+      <div className="rounded-3xl border p-6" style={{ background: "var(--bg-1)", borderColor: "var(--line)" }}>
+        <h2 className="text-lg font-semibold">Recent Sessions</h2>
+        {(sessions ?? []).length === 0 ? (
+          <div className="mt-4">
+            <EmptyState title="No sessions yet" description="Your last three scans will appear here once you run one." />
+          </div>
+        ) : (
+          <div className="mt-4 overflow-hidden rounded-2xl border" style={{ borderColor: "var(--line)" }}>
+            <table className="min-w-full text-sm">
+              <thead style={{ background: "var(--bg-2)", color: "var(--ink-2)" }}>
+                <tr>
+                  <th className="px-4 py-3 text-left">Folder</th>
+                  <th className="px-4 py-3 text-left">Files</th>
+                  <th className="px-4 py-3 text-left">Flagged</th>
+                  <th className="px-4 py-3 text-left">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sessions?.map((session) => (
+                  <tr key={session.id} className="border-t" style={{ borderColor: "var(--line-soft)" }}>
+                    <td className="px-4 py-3">{session.folder}</td>
+                    <td className="px-4 py-3">{session.total}</td>
+                    <td className="px-4 py-3">{session.flagged}</td>
+                    <td className="px-4 py-3 capitalize">{session.status}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );
