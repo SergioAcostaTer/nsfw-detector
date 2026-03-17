@@ -65,3 +65,13 @@ def scan_video_file(
         "frame_count": frame_count,
         "duration": read_video_duration(path),
     }
+
+
+def should_skip_video(*, file_size_bytes: int, duration_seconds: float, max_size_mb: int, max_duration_seconds: int):
+    size_limit_bytes = max_size_mb * 1024 * 1024 if max_size_mb > 0 else 0
+    duration_limit = float(max_duration_seconds) if max_duration_seconds > 0 else 0.0
+    if size_limit_bytes and file_size_bytes > size_limit_bytes:
+        return True
+    if duration_limit and duration_seconds > duration_limit:
+        return True
+    return False

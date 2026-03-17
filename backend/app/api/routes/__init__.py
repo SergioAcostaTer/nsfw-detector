@@ -1,3 +1,4 @@
+from app.api.routes.admin import router as admin_router
 from app.api.routes.export import router as export_router
 from app.api.routes.health import router as health_router
 from app.api.routes.quarantine import router as quarantine_router
@@ -8,6 +9,7 @@ from app.api.routes.settings import router as settings_router
 
 __all__ = [
     "export_router",
+    "admin_router",
     "health_router",
     "quarantine_router",
     "results_router",

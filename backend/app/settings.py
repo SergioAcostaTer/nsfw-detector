@@ -13,6 +13,12 @@ DEFAULT_SETTINGS = {
     "theme": "dark",
     "batch_size": 8,
     "video_fps": 1.0,
+    "max_preload_workers": 4,
+    "max_scan_workers": 4,
+    "image_max_dimension": 640,
+    "max_video_frames_per_file": 180,
+    "max_video_size_mb": 500,
+    "max_video_duration_seconds": 1800,
 }
 
 

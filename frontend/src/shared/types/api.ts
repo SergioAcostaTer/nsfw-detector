@@ -38,6 +38,8 @@ export interface AppSettings {
   max_scan_workers?: number;
   image_max_dimension?: number;
   max_video_frames_per_file?: number;
+  max_video_size_mb?: number;
+  max_video_duration_seconds?: number;
 }
 
 export interface ScanStatus {

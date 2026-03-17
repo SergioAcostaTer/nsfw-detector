@@ -10,7 +10,7 @@ from app.domain.scan.inference_service import infer_image_batch
 from app.domain.scan.media_loader import load_images
 from app.domain.scan.progress_service import ProgressTracker
 from app.domain.scan.result_writer import persist_scan_results
-from app.domain.scan.video_scan_service import scan_video_file
+from app.domain.scan.video_scan_service import read_video_duration, scan_video_file, should_skip_video
 from app.infrastructure.db.repositories.sessions_repository import SessionsRepository
 from app.settings import load_settings
 from app.shared.logging import get_logger
@@ -46,6 +46,8 @@ def scan_folder_files(
     video_fps = video_fps if video_fps is not None else settings.get("video_fps", 1.0)
     preload_workers = settings.get("max_preload_workers", 4)
     max_video_frames = settings.get("max_video_frames_per_file", 180)
+    max_video_size_mb = settings.get("max_video_size_mb", 500)
+    max_video_duration_seconds = settings.get("max_video_duration_seconds", 1800)
     if not settings.get("gpu_enabled", True):
         batch_size = 1
 
@@ -92,6 +94,21 @@ def scan_folder_files(
                     if entry["media_type"] == "image":
                         image_entries.append(entry)
                     else:
+                        duration_seconds = read_video_duration(path)
+                        if should_skip_video(
+                            file_size_bytes=entry["stat"].st_size,
+                            duration_seconds=duration_seconds,
+                            max_size_mb=max_video_size_mb,
+                            max_duration_seconds=max_video_duration_seconds,
+                        ):
+                            logger.info(
+                                "scan_skip_big_video path=%s size_bytes=%s duration_seconds=%.2f",
+                                path,
+                                entry["stat"].st_size,
+                                duration_seconds,
+                            )
+                            tracker.increment(current_file=current_file)
+                            continue
                         video_result = scan_video_file(
                             path,
                             explicit_threshold=explicit_threshold,
@@ -108,7 +125,7 @@ def scan_folder_files(
                                 "avg_score": video_result["avg_score"],
                                 "max_score": video_result["max_score"],
                                 "frame_count": video_result["frame_count"],
-                                "duration": video_result["duration"],
+                                "duration": video_result["duration"] or duration_seconds,
                                 "classes": str(video_result["classes"]),
                             }
                         )

@@ -1,5 +1,6 @@
 import queue
 import threading
+import time
 import uuid
 from dataclasses import dataclass, field
 from typing import Any, Callable
@@ -65,6 +66,36 @@ class JobQueue:
             if job.status == "pending":
                 job.status = "cancelled"
             return job
+
+    def has_active_jobs(self):
+        with self.lock:
+            return any(job.status in {"pending", "running"} for job in self.jobs.values())
+
+    def reset(self, timeout_s: float = 5.0):
+        with self.lock:
+            jobs = list(self.jobs.values())
+        for job in jobs:
+            job.cancelled = True
+            cancel_event = job.meta.get("cancel_event")
+            if cancel_event is not None:
+                cancel_event.set()
+
+        deadline = time.time() + timeout_s
+        while time.time() < deadline:
+            with self.lock:
+                active = [job for job in self.jobs.values() if job.status in {"pending", "running"}]
+            if not active:
+                break
+            time.sleep(0.1)
+
+        with self.lock:
+            while True:
+                try:
+                    self.queue.get_nowait()
+                    self.queue.task_done()
+                except queue.Empty:
+                    break
+            self.jobs.clear()
 
     def update(self, job_id: str, **kwargs):
         with self.lock:

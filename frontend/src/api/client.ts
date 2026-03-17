@@ -15,7 +15,7 @@ export { getSessions } from "@/features/activity/api";
 export { deleteExpiredQuarantine, deleteFiles, quarantineFiles, restoreFiles } from "@/features/quarantine/api";
 export { getFolders, getResults, getResultsCount, getSessionResults, getStats } from "@/features/review/api";
 export { cancelScan, getScanStatus, startPcScan, startScan } from "@/features/scan/api";
-export { getSettings, updateSettings } from "@/features/settings/api";
+export { getSettings, resetAppState, updateSettings } from "@/features/settings/api";
 
 export const imageUrl = (path: string) => `/api/image?path=${encodeURIComponent(path)}`;
 export const thumbnailUrl = (path: string, size = 400) =>

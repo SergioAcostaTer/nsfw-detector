@@ -2,9 +2,9 @@ import type { ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
-import { deleteExpiredQuarantine, getSettings, updateSettings, type AppSettings, type ThemeMode } from "@/api/client";
+import { deleteExpiredQuarantine, getSettings, resetAppState, updateSettings, type AppSettings, type ThemeMode } from "@/api/client";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { toast } from "@/components/ui";
+import { ConfirmDialog, toast } from "@/components/ui";
 import { applyTheme, storeTheme } from "@/shared/lib/theme";
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -16,6 +16,12 @@ const DEFAULT_SETTINGS: AppSettings = {
   theme: "dark",
   batch_size: 8,
   video_fps: 1.0,
+  max_preload_workers: 4,
+  max_scan_workers: 4,
+  image_max_dimension: 640,
+  max_video_frames_per_file: 180,
+  max_video_size_mb: 500,
+  max_video_duration_seconds: 1800,
 };
 
 function Section({ title, description, children }: { title: string; description: string; children: ReactNode }) {
@@ -40,6 +46,7 @@ export function Settings() {
   });
   const [localSettings, setLocalSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
+  const [confirmResetOpen, setConfirmResetOpen] = useState(false);
 
   useEffect(() => {
     if (data) {
@@ -73,6 +80,16 @@ export function Settings() {
       toast({ title: `${response.data.deleted} expired file${response.data.deleted === 1 ? "" : "s"} removed` });
     },
     onError: () => toast({ title: "Cleanup failed", variant: "error" }),
+  });
+
+  const reset = useMutation({
+    mutationFn: () => resetAppState(),
+    onSuccess: () => {
+      queryClient.clear();
+      toast({ title: "Database and job queue reset" });
+      setConfirmResetOpen(false);
+    },
+    onError: () => toast({ title: "Reset failed", variant: "error" }),
   });
 
   const updateField = <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => {
@@ -204,19 +221,67 @@ export function Settings() {
       </Section>
 
       <Section title="Video Processing" description="Control frame sampling for supported video scans.">
-        <label className="text-sm">
-          Frames per second
-          <input
-            type="number"
-            min={0.1}
-            max={10}
-            step={0.1}
-            value={localSettings.video_fps}
-            onChange={(event) => updateField("video_fps", Math.max(0.1, Number(event.target.value) || 1))}
-            className="ml-2 w-24 rounded-xl border px-3 py-2"
-            style={{ background: "var(--bg-2)", borderColor: "var(--line)" }}
-          />
-        </label>
+        <div className="flex flex-wrap gap-4">
+          <label className="text-sm">
+            Frames per second
+            <input
+              type="number"
+              min={0.1}
+              max={10}
+              step={0.1}
+              value={localSettings.video_fps}
+              onChange={(event) => updateField("video_fps", Math.max(0.1, Number(event.target.value) || 1))}
+              className="ml-2 w-24 rounded-xl border px-3 py-2"
+              style={{ background: "var(--bg-2)", borderColor: "var(--line)" }}
+            />
+          </label>
+          <label className="text-sm">
+            Max frames
+            <input
+              type="number"
+              min={1}
+              max={10000}
+              value={localSettings.max_video_frames_per_file ?? 180}
+              onChange={(event) => updateField("max_video_frames_per_file", Math.max(1, Number(event.target.value) || 1))}
+              className="ml-2 w-24 rounded-xl border px-3 py-2"
+              style={{ background: "var(--bg-2)", borderColor: "var(--line)" }}
+            />
+          </label>
+          <label className="text-sm">
+            Skip if size over MB
+            <input
+              type="number"
+              min={0}
+              max={50000}
+              value={localSettings.max_video_size_mb ?? 500}
+              onChange={(event) => updateField("max_video_size_mb", Math.max(0, Number(event.target.value) || 0))}
+              className="ml-2 w-24 rounded-xl border px-3 py-2"
+              style={{ background: "var(--bg-2)", borderColor: "var(--line)" }}
+            />
+          </label>
+          <label className="text-sm">
+            Skip if duration over sec
+            <input
+              type="number"
+              min={0}
+              max={86400}
+              value={localSettings.max_video_duration_seconds ?? 1800}
+              onChange={(event) => updateField("max_video_duration_seconds", Math.max(0, Number(event.target.value) || 0))}
+              className="ml-2 w-28 rounded-xl border px-3 py-2"
+              style={{ background: "var(--bg-2)", borderColor: "var(--line)" }}
+            />
+          </label>
+        </div>
+      </Section>
+
+      <Section title="Danger Zone" description="Reset the SQLite database and clear the in-memory job queue. Settings are kept.">
+        <button
+          onClick={() => setConfirmResetOpen(true)}
+          className="rounded-2xl px-4 py-2 text-sm font-medium"
+          style={{ background: "var(--red-dim)", color: "var(--red)" }}
+        >
+          Reset database and jobs
+        </button>
       </Section>
 
       <Section title="Appearance" description="Choose a local theme. System follows your OS preference.">
@@ -236,6 +301,15 @@ export function Settings() {
           ))}
         </div>
       </Section>
+
+      <ConfirmDialog
+        open={confirmResetOpen}
+        title="Reset SQLite and job queue?"
+        description="This deletes the current scanner database, clears queued/running jobs, and recreates the schema from scratch."
+        confirmLabel="Reset everything"
+        onCancel={() => setConfirmResetOpen(false)}
+        onConfirm={() => reset.mutate()}
+      />
     </div>
   );
 }
