@@ -33,25 +33,29 @@ A powerful, local AI-powered image scanner to detect explicit content using `ONN
 ### 3. Usage
 
 #### 🔍 Scan a Folder
-Run the scanner on any directory containing images:
+Run the scanner on any directory containing images. Always run from the project root using the `-m` flag to ensure proper imports:
 ```bash
-python app/main.py scan "C:/Users/YourName/Pictures"
+python -m app.main scan "C:/Users/YourName/Pictures"
+```
+Or use the entry point:
+```bash
+python run.py scan "C:/Users/YourName/Pictures"
 ```
 
 #### 🖥️ Review Flagged Images
 Start the dashboard to review "explicit" and "borderline" detections:
 ```bash
-streamlit run app/gui.py
+python -m streamlit run app/gui.py
 ```
 
 #### 📦 Management Commands
 - **Quarantine**: Move all `explicit` detected images to the `./quarantine/` folder:
   ```bash
-  python app/main.py quarantine
+  python -m app.main quarantine
   ```
 - **Delete**: Permanently delete all `explicit` detected images:
   ```bash
-  python app/main.py delete
+  python -m app.main delete
   ```
 
 ## 🛠️ Configuration

@@ -19,12 +19,12 @@ pip install -r requirements.txt
 
 :: 3. Run Scan
 echo [3/4] Starting scan in C:\Users\Sergio\Videos...
-python app/main.py scan "C:\Users\Sergio\Videos"
+python -m app.main scan "C:\Users\Sergio\Videos"
 
 :: 4. Start GUI
 echo [4/4] Launching Review Dashboard...
 echo Dashboard will open in your browser shortly...
-streamlit run app/gui.py
+python -m streamlit run app/gui.py
 
 echo Done.
 pause
