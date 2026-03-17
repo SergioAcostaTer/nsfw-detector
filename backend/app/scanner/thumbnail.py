@@ -4,14 +4,15 @@ from pathlib import Path
 import cv2
 from PIL import Image
 
-from app.config import THUMBNAIL_CACHE_DIR
+from app.infrastructure.cache.thumbnail_cache import ThumbnailCache
 
 
 def make_thumbnail(path: Path, max_size: int = 400, cache_key: str | None = None) -> bytes:
+    cache = ThumbnailCache()
     if cache_key:
-        cached_path = THUMBNAIL_CACHE_DIR / f"{cache_key}.webp"
-        if cached_path.exists():
-            return cached_path.read_bytes()
+        cached = cache.get(cache_key, max_size)
+        if cached is not None:
+            return cached
 
     try:
         with Image.open(path) as img:
@@ -33,8 +34,6 @@ def make_thumbnail(path: Path, max_size: int = 400, cache_key: str | None = None
         data = buffer.getvalue()
 
     if cache_key:
-        THUMBNAIL_CACHE_DIR.mkdir(parents=True, exist_ok=True)
-        cached_path = THUMBNAIL_CACHE_DIR / f"{cache_key}.webp"
-        cached_path.write_bytes(data)
+        cache.set(cache_key, max_size, data)
 
     return data

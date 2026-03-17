@@ -6,11 +6,15 @@ from app.config import IMAGE_EXTENSIONS, VIDEO_EXTENSIONS
 
 def iter_media_files(folder: Path):
     allowed = set(IMAGE_EXTENSIONS + VIDEO_EXTENSIONS)
-    return [path for path in folder.rglob("*") if path.is_file() and path.suffix.lower() in allowed]
+    for path in folder.rglob("*"):
+        if path.is_file() and path.suffix.lower() in allowed:
+            yield path
 
 
 def iter_image_files(folder: Path):
-    return [path for path in iter_media_files(folder) if path.suffix.lower() in IMAGE_EXTENSIONS]
+    for path in iter_media_files(folder):
+        if path.suffix.lower() in IMAGE_EXTENSIONS:
+            yield path
 
 
 def file_type_for_path(path: Path) -> str:

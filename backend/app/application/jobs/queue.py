@@ -4,6 +4,8 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
+from app.shared.utils import now_ms
+
 
 @dataclass
 class Job:
@@ -33,6 +35,9 @@ class JobQueue:
 
     def register(self, job_type: str, handler: Callable[[Job], dict[str, Any]]):
         self.handlers[job_type] = handler
+
+    def clock(self):
+        return now_ms()
 
     def enqueue(self, job_type: str, payload: dict[str, Any]):
         job = Job(id=uuid.uuid4().hex, type=job_type, payload=payload)

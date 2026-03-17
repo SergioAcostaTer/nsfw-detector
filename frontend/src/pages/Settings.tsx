@@ -2,10 +2,10 @@ import type { ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
-import { applyTheme } from "@/App";
 import { deleteExpiredQuarantine, getSettings, updateSettings, type AppSettings, type ThemeMode } from "@/api/client";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { toast } from "@/components/ui";
+import { applyTheme, storeTheme } from "@/shared/lib/theme";
 
 const DEFAULT_SETTINGS: AppSettings = {
   gpu_enabled: true,
@@ -44,7 +44,7 @@ export function Settings() {
   useEffect(() => {
     if (data) {
       setLocalSettings(data);
-      window.localStorage.setItem("theme", data.theme);
+      storeTheme(data.theme);
       applyTheme(data.theme);
     }
   }, [data]);
@@ -58,7 +58,7 @@ export function Settings() {
     onSuccess: (response) => {
       queryClient.invalidateQueries({ queryKey: ["settings"] });
       setLastSavedAt(Date.now());
-      window.localStorage.setItem("theme", response.data.theme);
+      storeTheme(response.data.theme);
       applyTheme(response.data.theme);
       toast({ title: "Settings saved" });
     },

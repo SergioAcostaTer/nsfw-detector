@@ -9,3 +9,6 @@ opencv-python-headless>=4.10
 Pillow>=10.0
 tqdm
 apscheduler>=3.10
+black>=25.1
+ruff>=0.11
+pytest>=8.3

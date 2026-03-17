@@ -1,102 +1,21 @@
-import axios from "axios";
-
-export const api = axios.create({ baseURL: "/api" });
-
-export type Decision = "explicit" | "borderline" | "safe";
-export type FileStatus = "active" | "quarantined" | "deleted";
-export type ThemeMode = "dark" | "light" | "system";
-
-export interface ScanResult {
-  id: number;
-  path: string;
-  folder: string;
-  status: FileStatus;
-  quarantined_at: number | null;
-  type?: "image" | "video";
-  frame_count?: number;
-  duration?: number;
-  decision: Decision;
-  score: number;
-  classes: string;
-  created_at: number;
-  avg_score?: number;
-  max_score?: number;
-}
-
-export interface Stats {
-  decisions: Record<string, number>;
-  quarantined: number;
-  recent_sessions: ScanSession[];
-}
-
-export interface AppSettings {
-  gpu_enabled: boolean;
-  explicit_threshold: number;
-  borderline_threshold: number;
-  custom_skip_folders: string[];
-  auto_delete_days: number;
-  theme: ThemeMode;
-  batch_size: number;
-  video_fps: number;
-}
-
-export interface ScanStatus {
-  running: boolean;
-  progress: number;
-  total: number;
-  flagged: number;
-  current_file: string;
-  job_id?: string | null;
-  status?: string;
-}
-
-export interface ScanSession {
-  id: number;
-  folder: string;
-  started_at: number;
-  ended_at: number | null;
-  total: number;
-  flagged: number;
-  status: string;
-}
-
-export interface FolderSummary {
-  folder: string;
-  count: number;
-  flagged: number;
-  last_scanned: number | null;
-}
-
-export interface ResultsResponse {
-  total: number;
-  items: ScanResult[];
-}
-
-export const startScan = (folder: string) => api.post("/scan", { folder });
-export const startPcScan = () => api.post("/scan/pc");
-export const cancelScan = () => api.post("/scan/cancel");
-
-export const getScanStatus = () => api.get<ScanStatus>("/scan/status");
-
-export const getResults = (params?: {
-  decision?: string;
-  folder?: string;
-  status?: string;
-  limit?: number;
-  offset?: number;
-}) => api.get<ResultsResponse>("/results", { params });
-
-export const getResultsCount = () => api.get<Record<string, number>>("/results/count");
-export const getStats = () => api.get<Stats>("/stats");
-export const getFolders = () => api.get<FolderSummary[]>("/folders");
-export const getSessions = (limit = 20) => api.get<ScanSession[]>("/sessions", { params: { limit } });
-export const getSessionResults = (sessionId: number) => api.get<ScanResult[]>(`/sessions/${sessionId}/results`);
-export const getSettings = () => api.get<AppSettings>("/settings");
-export const updateSettings = (settings: AppSettings) => api.put<AppSettings>("/settings", settings);
-export const quarantineFiles = (file_ids: number[]) => api.post("/quarantine", { file_ids });
-export const restoreFiles = (file_ids: number[]) => api.post("/restore", { file_ids });
-export const deleteFiles = (file_ids: number[]) => api.delete("/delete", { data: { file_ids } });
-export const deleteExpiredQuarantine = () => api.delete<{ deleted: number }>("/quarantine/expired");
+export { api } from "@/shared/api/client";
+export type {
+  AppSettings,
+  Decision,
+  FileStatus,
+  FolderSummary,
+  ResultsResponse,
+  ScanResult,
+  ScanSession,
+  ScanStatus,
+  Stats,
+  ThemeMode,
+} from "@/shared/types/api";
+export { getSessions } from "@/features/activity/api";
+export { deleteExpiredQuarantine, deleteFiles, quarantineFiles, restoreFiles } from "@/features/quarantine/api";
+export { getFolders, getResults, getResultsCount, getSessionResults, getStats } from "@/features/review/api";
+export { cancelScan, getScanStatus, startPcScan, startScan } from "@/features/scan/api";
+export { getSettings, updateSettings } from "@/features/settings/api";
 
 export const imageUrl = (path: string) => `/api/image?path=${encodeURIComponent(path)}`;
 export const thumbnailUrl = (path: string, size = 400) =>

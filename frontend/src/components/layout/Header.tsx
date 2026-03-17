@@ -4,20 +4,24 @@ import { Command, Search } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import { getResults, getScanStatus, thumbnailUrl } from "@/api/client";
+import { filenameFromPath } from "@/shared/lib/format";
+import { queryKeys } from "@/shared/lib/queryKeys";
 
 export function Header() {
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [focused, setFocused] = useState(false);
   const { data: status } = useQuery({
-    queryKey: ["scanStatus"],
+    queryKey: queryKeys.scanStatus(),
     queryFn: () => getScanStatus().then((response) => response.data),
-    refetchInterval: 1000,
+    refetchInterval: (query) => (query.state.data?.running ? 1000 : false),
   });
   const { data: searchable } = useQuery({
-    queryKey: ["headerSearch"],
-    queryFn: () => getResults({ status: "active", limit: 1000 }).then((response) => response.data),
+    queryKey: queryKeys.headerSearch(debouncedQuery),
+    queryFn: () => getResults({ status: "active", q: debouncedQuery, limit: 8 }).then((response) => response.data),
+    enabled: debouncedQuery.trim().length > 0,
   });
 
   useEffect(() => {
@@ -34,14 +38,14 @@ export function Header() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  useEffect(() => {
+    const handle = window.setTimeout(() => setDebouncedQuery(query.trim()), 180);
+    return () => window.clearTimeout(handle);
+  }, [query]);
+
   const results = useMemo(() => {
-    const items = searchable?.items ?? [];
-    const term = query.trim().toLowerCase();
-    if (!term) {
-      return items.slice(0, 6);
-    }
-    return items.filter((item) => item.path.toLowerCase().includes(term)).slice(0, 6);
-  }, [query, searchable?.items]);
+    return searchable?.items ?? [];
+  }, [searchable?.items]);
 
   return (
     <header
@@ -83,7 +87,11 @@ export function Header() {
             className="absolute left-0 right-0 top-[calc(100%+8px)] overflow-hidden rounded-2xl border"
             style={{ background: "var(--bg-1)", borderColor: "var(--line)" }}
           >
-            {results.length === 0 ? (
+            {debouncedQuery.trim().length === 0 ? (
+              <p className="px-4 py-6 text-sm" style={{ color: "var(--ink-2)" }}>
+                Type to search flagged files.
+              </p>
+            ) : results.length === 0 ? (
               <p className="px-4 py-6 text-sm" style={{ color: "var(--ink-2)" }}>
                 No matching flagged files.
               </p>
@@ -101,7 +109,7 @@ export function Header() {
                 >
                   <img src={thumbnailUrl(item.path, 64)} alt="" className="h-10 w-10 rounded-lg object-cover" />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">{item.path.split(/[\\/]/).pop()}</p>
+                    <p className="truncate text-sm font-medium">{filenameFromPath(item.path)}</p>
                     <p className="truncate text-xs" style={{ color: "var(--ink-2)" }}>
                       {item.folder}{item.type === "video" ? ` · video${item.frame_count ? ` · ${item.frame_count}f` : ""}` : ""}
                     </p>

@@ -1,125 +1,30 @@
-import time
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from threading import Event
 
 from app.db.models import init_db
 from app.db.session import get_db
-from app.domain.file.file_service import load_image
-from app.domain.scan.decision import decide
-from app.infrastructure.video.video_processor import extract_frames
-from app.scanner.detector import get_detector
-from app.scanner.file_utils import file_fingerprint, file_type_for_path, hash_file, iter_media_files
+from app.domain.media.file_identity_service import build_file_identity
+from app.domain.media.media_service import media_type_for_path
+from app.domain.scan.discovery_service import chunk_discovered_media, load_existing_manifest
+from app.domain.scan.inference_service import infer_image_batch
+from app.domain.scan.media_loader import load_images
+from app.domain.scan.progress_service import ProgressTracker
+from app.domain.scan.result_writer import persist_scan_results
+from app.domain.scan.video_scan_service import scan_video_file
+from app.infrastructure.db.repositories.sessions_repository import SessionsRepository
 from app.settings import load_settings
+from app.shared.logging import get_logger
+from app.shared.utils import now_ms
+
+logger = get_logger("scan.pipeline")
 
 
-def _now_ms() -> int:
-    return time.time_ns() // 1_000_000
-
-
-def _split_chunks(items, chunk_size):
-    for index in range(0, len(items), chunk_size):
-        yield items[index : index + chunk_size]
-
-
-def _scan_video_file(path: Path, *, detector, explicit_threshold: float, borderline_threshold: float, fps: float):
-    frames, duration = extract_frames(path, fps=fps)
-    if not frames:
-        return {
-            "decision": "safe",
-            "score": 0.0,
-            "avg_score": 0.0,
-            "max_score": 0.0,
-            "classes": [],
-            "frame_count": 0,
-            "duration": duration,
-        }
-
-    frame_detections = detector.detect_batch(frames)
-    frame_scores = []
-    explicit_frames = 0
-    merged_classes = []
-    for detections in frame_detections:
-        decision, score = decide(
-            detections,
-            explicit_threshold=explicit_threshold,
-            borderline_threshold=borderline_threshold,
-        )
-        frame_scores.append(score)
-        if decision == "explicit":
-            explicit_frames += 1
-        merged_classes.extend(item["class"] for item in detections)
-
-    max_score = max(frame_scores, default=0.0)
-    avg_score = sum(frame_scores) / len(frame_scores)
-    if explicit_frames > 0 or max_score > explicit_threshold:
-        decision_value = "explicit"
-        score = max_score
-    elif avg_score > borderline_threshold:
-        decision_value = "borderline"
-        score = avg_score
-    else:
-        decision_value = "safe"
-        score = max_score
-
-    return {
-        "decision": decision_value,
-        "score": score,
-        "avg_score": avg_score,
-        "max_score": max_score,
-        "classes": sorted(set(merged_classes)),
-        "frame_count": len(frames),
-        "duration": duration,
-    }
-
-
-def _write_result(conn, *, path: Path, folder: Path, stat, file_hash: str, fingerprint: str, media_type: str, result, detections_repr: str):
-    conn.execute(
-        """
-        INSERT INTO files (path, size, mtime, hash, folder, status, last_scanned_at, deleted_at, type, frame_count, duration, fingerprint)
-        VALUES (?, ?, ?, ?, ?, 'active', ?, NULL, ?, ?, ?, ?)
-        ON CONFLICT(path) DO UPDATE SET
-            size=excluded.size,
-            mtime=excluded.mtime,
-            hash=excluded.hash,
-            folder=excluded.folder,
-            status='active',
-            last_scanned_at=excluded.last_scanned_at,
-            deleted_at=NULL,
-            type=excluded.type,
-            frame_count=excluded.frame_count,
-            duration=excluded.duration,
-            fingerprint=excluded.fingerprint
-        """,
-        (
-            str(path),
-            stat.st_size,
-            stat.st_mtime,
-            file_hash,
-            str(folder),
-            _now_ms(),
-            media_type,
-            result.get("frame_count", 0),
-            result.get("duration", 0.0),
-            fingerprint,
-        ),
-    )
-    file_id = conn.execute("SELECT id FROM files WHERE path = ?", (str(path),)).fetchone()[0]
-    conn.execute(
-        """
-        INSERT INTO results (file_id, score, decision, classes, created_at, avg_score, max_score)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        """,
-        (
-            file_id,
-            result["score"],
-            result["decision"],
-            detections_repr,
-            _now_ms(),
-            result.get("avg_score", result["score"]),
-            result.get("max_score", result["score"]),
-        ),
-    )
+def _iter_chunks_from_files(files: list[Path], chunk_size: int):
+    for start in range(0, len(files), chunk_size):
+        yield [
+            {"index": start + offset + 1, "path": path}
+            for offset, path in enumerate(files[start : start + chunk_size])
+        ]
 
 
 def scan_folder_files(
@@ -137,139 +42,164 @@ def scan_folder_files(
     settings = load_settings()
     explicit_threshold = explicit_threshold if explicit_threshold is not None else settings.get("explicit_threshold", 0.6)
     borderline_threshold = borderline_threshold if borderline_threshold is not None else settings.get("borderline_threshold", 0.4)
-    video_fps = video_fps if video_fps is not None else settings.get("video_fps", 1.0)
     batch_size = batch_size if batch_size is not None else settings.get("batch_size", 8)
+    video_fps = video_fps if video_fps is not None else settings.get("video_fps", 1.0)
+    preload_workers = settings.get("max_preload_workers", 4)
+    max_video_frames = settings.get("max_video_frames_per_file", 180)
     if not settings.get("gpu_enabled", True):
         batch_size = 1
 
-    detector = get_detector()
-    flagged = 0
+    tracker = ProgressTracker(total=len(files), callback=progress_callback)
     status = "done"
 
     with get_db() as conn:
         init_db(conn)
-        preload_pool = ThreadPoolExecutor(max_workers=4)
-
-        def update(index: int, current_file: str):
-            if progress_callback:
-                progress_callback(index=index, total=len(files), flagged=flagged, current_file=current_file)
-
-        for chunk in _split_chunks(files, batch_size):
+        sessions_repo = SessionsRepository(conn)
+        chunk_source = _iter_chunks_from_files(files, max(1, batch_size))
+        for chunk in chunk_source:
             if cancel_event and cancel_event.is_set():
                 status = "cancelled"
                 break
 
+            stage_start = now_ms()
+            manifest = load_existing_manifest([str(item["path"]) for item in chunk])
+            tracker.metrics.filtering_ms += now_ms() - stage_start
+
             image_entries = []
-            video_entries = []
-            for path in chunk:
-                current_file = str(path.name)
+            persisted_records = []
+            stage_start = now_ms()
+            for item in chunk:
+                path = item["path"]
+                current_file = path.name
                 try:
-                    existing = conn.execute(
-                        "SELECT status, mtime, fingerprint, hash FROM files WHERE path = ?",
-                        (str(path),),
-                    ).fetchone()
-                    if existing and existing[0] in ("quarantined", "deleted"):
-                        update(files.index(path) + 1, current_file)
+                    existing = manifest.get(str(path))
+                    if existing and existing["status"] in ("quarantined", "deleted"):
+                        tracker.increment(current_file=current_file)
+                        continue
+                    identity = build_file_identity(path, existing)
+                    if existing and existing.get("fingerprint") == identity["fingerprint"]:
+                        tracker.increment(current_file=current_file)
                         continue
 
-                    stat = path.stat()
-                    fingerprint = f"{stat.st_size}-{int(stat.st_mtime_ns)}"
-                    if existing and existing[2] == fingerprint:
-                        update(files.index(path) + 1, current_file)
-                        continue
-
-                    media_type = file_type_for_path(path)
-                    item = {
+                    entry = {
+                        "index": item["index"],
                         "path": path,
-                        "stat": stat,
-                        "fingerprint": fingerprint,
-                        "file_hash": existing[3] if existing and existing[2] == fingerprint else hash_file(path),
-                        "media_type": media_type,
-                        "index": files.index(path) + 1,
+                        "media_type": media_type_for_path(path),
+                        "stat": identity["stat"],
+                        "fingerprint": identity["fingerprint"],
+                        "hash": identity["hash"],
                     }
-                    if media_type == "image":
-                        image_entries.append(item)
+                    if entry["media_type"] == "image":
+                        image_entries.append(entry)
                     else:
-                        video_entries.append(item)
+                        video_result = scan_video_file(
+                            path,
+                            explicit_threshold=explicit_threshold,
+                            borderline_threshold=borderline_threshold,
+                            fps=video_fps,
+                            max_frames=max_video_frames,
+                            batch_size=batch_size,
+                        )
+                        persisted_records.append(
+                            {
+                                "entry": entry,
+                                "decision": video_result["decision"],
+                                "score": video_result["score"],
+                                "avg_score": video_result["avg_score"],
+                                "max_score": video_result["max_score"],
+                                "frame_count": video_result["frame_count"],
+                                "duration": video_result["duration"],
+                                "classes": str(video_result["classes"]),
+                            }
+                        )
+                        tracker.increment(
+                            current_file=current_file,
+                            flagged_delta=1 if video_result["decision"] != "safe" else 0,
+                        )
                 except Exception as exc:
-                    print(f"Error preparing {path}: {exc}")
-                    update(files.index(path) + 1, current_file)
+                    logger.warning("scan_prepare_failed path=%s error=%s", path, exc)
+                    tracker.increment(current_file=current_file)
+            tracker.metrics.discovery_ms += now_ms() - stage_start
 
-            loaded_images = list(preload_pool.map(load_image, [entry["path"] for entry in image_entries])) if image_entries else []
-            image_batch = [(entry, image) for entry, image in zip(image_entries, loaded_images) if image is not None]
-            if image_batch:
-                batch_detections = detector.detect_batch([image for _, image in image_batch])
-                for (entry, _image), detections in zip(image_batch, batch_detections):
-                    result_decision, score = decide(
-                        detections,
-                        explicit_threshold=explicit_threshold,
-                        borderline_threshold=borderline_threshold,
-                    )
-                    result = {
-                        "decision": result_decision,
-                        "score": score,
-                        "avg_score": score,
-                        "max_score": score,
+            stage_start = now_ms()
+            loaded_images = load_images(image_entries, max_workers=preload_workers) if image_entries else []
+            tracker.metrics.load_ms += now_ms() - stage_start
+
+            stage_start = now_ms()
+            image_results = infer_image_batch(
+                loaded_images,
+                explicit_threshold=explicit_threshold,
+                borderline_threshold=borderline_threshold,
+            )
+            tracker.metrics.inference_ms += now_ms() - stage_start
+
+            for image_result in image_results:
+                persisted_records.append(
+                    {
+                        "entry": image_result["entry"],
+                        "decision": image_result["decision"],
+                        "score": image_result["score"],
+                        "avg_score": image_result["avg_score"],
+                        "max_score": image_result["max_score"],
                         "frame_count": 0,
                         "duration": 0.0,
+                        "classes": str(image_result["detections"]),
                     }
-                    _write_result(
-                        conn,
-                        path=entry["path"],
-                        folder=folder,
-                        stat=entry["stat"],
-                        file_hash=entry["file_hash"],
-                        fingerprint=entry["fingerprint"],
-                        media_type="image",
-                        result=result,
-                        detections_repr=str(detections),
-                    )
-                    if result_decision != "safe":
-                        flagged += 1
-                    update(entry["index"], entry["path"].name)
+                )
+                tracker.increment(
+                    current_file=image_result["entry"]["path"].name,
+                    flagged_delta=1 if image_result["decision"] != "safe" else 0,
+                )
 
-            for entry in video_entries:
-                result = _scan_video_file(
-                    entry["path"],
-                    detector=detector,
-                    explicit_threshold=explicit_threshold,
-                    borderline_threshold=borderline_threshold,
-                    fps=video_fps,
-                )
-                _write_result(
-                    conn,
-                    path=entry["path"],
-                    folder=folder,
-                    stat=entry["stat"],
-                    file_hash=entry["file_hash"],
-                    fingerprint=entry["fingerprint"],
-                    media_type="video",
-                    result=result,
-                    detections_repr=str(result["classes"]),
-                )
-                if result["decision"] != "safe":
-                    flagged += 1
-                update(entry["index"], entry["path"].name)
+            if persisted_records:
+                stage_start = now_ms()
+                persist_scan_results(conn, folder=folder, records=persisted_records)
+                conn.commit()
+                tracker.metrics.db_write_ms += now_ms() - stage_start
 
         if session_id:
-            conn.execute(
-                """
-                UPDATE scan_sessions
-                SET ended_at=?, total=?, flagged=?, status=?
-                WHERE id=?
-                """,
-                (_now_ms(), len(files), flagged, status, session_id),
+            sessions_repo.finish_session(
+                session_id,
+                ended_at=now_ms(),
+                total=tracker.total,
+                flagged=tracker.flagged,
+                status=status,
             )
-        conn.commit()
+            conn.commit()
 
-    return {"total": len(files), "flagged": flagged, "status": status, "progress": 100 if status == "done" else 0}
+    metrics = tracker.finish()
+    logger.info(
+        "scan_complete session_id=%s total=%s flagged=%s status=%s discovery_ms=%s filtering_ms=%s load_ms=%s inference_ms=%s db_write_ms=%s total_ms=%s files_per_second=%.2f",
+        session_id,
+        tracker.total,
+        tracker.flagged,
+        status,
+        metrics.discovery_ms,
+        metrics.filtering_ms,
+        metrics.load_ms,
+        metrics.inference_ms,
+        metrics.db_write_ms,
+        metrics.total_ms,
+        metrics.files_per_second,
+    )
+    return {"total": tracker.total, "flagged": tracker.flagged, "status": status, "progress": 100 if status == "done" else 0}
 
 
 def scan_folder(folder: Path, session_id: int | None = None, progress_callback=None, cancel_event: Event | None = None):
+    settings = load_settings()
+    batch_size = max(1, settings.get("batch_size", 8))
+    tracker = ProgressTracker(total=0, callback=progress_callback)
+    all_files: list[Path] = []
+    for chunk in chunk_discovered_media(folder, batch_size * 4):
+        all_files.extend(item["path"] for item in chunk)
+        tracker.set_total(len(all_files))
+    tracker.finish()
     return scan_folder_files(
         folder,
-        iter_media_files(folder),
+        all_files,
         session_id=session_id,
         progress_callback=progress_callback,
         cancel_event=cancel_event,
+        batch_size=batch_size,
+        video_fps=settings.get("video_fps", 1.0),
     )
