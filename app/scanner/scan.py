@@ -1,4 +1,4 @@
-﻿import cv2
+import cv2
 import time
 from pathlib import Path
 from tqdm import tqdm
@@ -19,6 +19,15 @@ def scan_folder(folder: Path):
     
     for path in tqdm(files):
         stat = path.stat()
+        
+        # Incremental scan: skip if mtime hasn't changed
+        existing = conn.execute(
+            "SELECT mtime FROM files WHERE path = ?", (str(path),)
+        ).fetchone()
+
+        if existing and existing[0] == stat.st_mtime:
+            continue
+
         image = cv2.imread(str(path))
         if image is None:
             continue

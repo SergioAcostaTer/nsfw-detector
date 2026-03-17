@@ -1,4 +1,4 @@
-﻿import streamlit as st
+import streamlit as st
 import pandas as pd
 from PIL import Image
 from app.db.database import get_conn
@@ -28,12 +28,14 @@ if df.empty:
 else:
     st.write(f"Found **{len(df)}** flagged images requiring review.")
     
+    st.cache_data.clear()
     # Create a grid layout
     cols = st.columns(3)
     for index, row in df.iterrows():
         with cols[index % 3]:
             try:
                 img = Image.open(row['path'])
+                img.thumbnail((400, 400))
                 st.image(img, use_container_width=True)
                 st.caption(f"**Path**: {row['path']}")
                 st.caption(f"**Decision**: {row['decision']} ({row['score']:.2f})")

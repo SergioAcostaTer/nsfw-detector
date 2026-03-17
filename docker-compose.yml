@@ -1,4 +1,4 @@
-﻿version: '3.8'
+version: '3.8'
 
 services:
   scanner:
@@ -7,13 +7,9 @@ services:
     volumes:
       - .:/app
       - /path/to/your/images/on/host:/target_images # UPDATE THIS
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu] # Enables GPU if available
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
 
   gui:
     build: .
