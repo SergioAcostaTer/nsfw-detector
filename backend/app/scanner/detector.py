@@ -41,10 +41,15 @@ class Detector:
         detections = []
         for pred in preds[0]:
             score = float(pred[4])
+            if score > 1.0:
+                score = score / 100.0
+            score = max(0.0, min(score, 1.0))
             if score < 0.4:
                 continue
 
-            class_id = int(pred[5])
+            class_id = int(pred[5]) if len(pred) > 5 else -1
+            if class_id not in class_map:
+                print(f"Unknown class_id: {class_id}")
             detections.append(
                 {"class": class_map.get(class_id, "UNKNOWN"), "score": score}
             )
