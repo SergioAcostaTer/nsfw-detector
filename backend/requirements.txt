@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+python-multipart
+onnxruntime-gpu
+opencv-python-headless
+Pillow
+tqdm
+apscheduler

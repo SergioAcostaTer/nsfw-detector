@@ -1,64 +1,47 @@
-# 🛡️ NSFW Scanner
+# NSFW Scanner
 
-A powerful, local AI-powered image scanner to detect explicit content using `ONNX` and `OpenCV`. This tool helps you automatically identify and manage NSFW images in your local folders.
+Local web app for scanning image folders with an ONNX NSFW model, reviewing flagged files, quarantining them, and auto-deleting quarantined files after 30 days.
 
-## ✨ Features
-- **Fast GPU/CPU Inference**: Uses `onnxruntime` for high-performance detection.
-- **Incremental Scanning**: Only scans new or modified files.
-- **Review Dashboard**: Beautiful Streamlit-based GUI to review flagged content.
-- **Automation Tools**: Commands to move explicit files to quarantine or delete them.
+## Stack
 
-## 🚀 Getting Started
+- `backend/`: FastAPI API, SQLite lifecycle tracking, ONNX inference, quarantine jobs
+- `frontend/`: React + Vite + TypeScript UI
+- Root launch scripts: `start.sh`, `start.bat`
 
-### 1. Prerequisites
-- Python 3.9+
-- An NVIDIA GPU (optional, for CUDA acceleration)
+## Quickstart
 
-### 2. Setup
-1. **Clone the repository**:
-   ```bash
-   git clone <repo-url>
-   cd nsfw-detector
-   ```
+1. Put your model at [backend/models/nudenet.onnx](/C:/Users/Sergio/Desktop/nsfw-detector/backend/models/nudenet.onnx).
+2. Start the stack:
+   - Windows: `start.bat`
+   - Linux/macOS: `chmod +x start.sh && ./start.sh`
+3. Open `http://localhost:5173`.
 
-2. **Install dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
+## Backend
 
-3. **Add the Model**:
-   Place your NudeNet ONNX model (e.g., `nudenet.onnx`) in the `models/` directory.
-   - Expected path: `models/nudenet.onnx`
+Install deps with:
 
-### 3. Usage
-
-#### 🔍 Scan a Folder
-Run the scanner on any directory containing images. Always run from the project root using the `-m` flag to ensure proper imports:
 ```bash
-python -m app.main scan "C:/Users/YourName/Pictures"
-```
-Or use the entry point:
-```bash
-python run.py scan "C:/Users/YourName/Pictures"
+cd backend
+pip install -r requirements.txt
+python run_backend.py
 ```
 
-#### 🖥️ Review Flagged Images
-Start the dashboard to review "explicit" and "borderline" detections:
+API base URL: `http://localhost:8000`
+
+## Frontend
+
+Install deps with:
+
 ```bash
-python -m streamlit run app/gui.py
+cd frontend
+pnpm install
+pnpm dev
 ```
 
-#### 📦 Management Commands
-- **Quarantine**: Move all `explicit` detected images to the `./quarantine/` folder:
-  ```bash
-  python -m app.main quarantine
-  ```
-- **Delete**: Permanently delete all `explicit` detected images:
-  ```bash
-  python -m app.main delete
-  ```
+The Vite dev server proxies `/api/*` to the backend.
 
-## 🛠️ Configuration
-You can adjust thresholds and supported extensions in `app/config.py`.
-- `EXPLICIT_THRESHOLD`: Default `0.6`
-- `BORDERLINE_THRESHOLD`: Default `0.4`
+## Notes
+
+- Existing legacy CLI/Streamlit files remain in the repo, but the new app lives under `backend/` and `frontend/`.
+- Quarantined files are served only through `/api/image?path=...`.
+- Database migrations run automatically on FastAPI startup.

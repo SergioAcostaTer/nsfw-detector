@@ -19,7 +19,7 @@ pip install -r requirements.txt
 
 :: 3. Run Scan
 echo [3/4] Starting scan in C:\Users\Sergio\Videos...
-python -m app.main scan "C:\Users\Sergio\Videos"
+python -m app.main scan "C:\Users\Sergio"
 
 :: 4. Start GUI
 echo [4/4] Launching Review Dashboard...

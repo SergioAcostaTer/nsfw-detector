@@ -27,12 +27,21 @@ ENV/
 
 # Database
 data/*.db
+backend/data/*.db
 
 # Models
 models/*.onnx
+backend/models/*.onnx
+!backend/models/.gitkeep
 
 # Quarantine
 quarantine/
+backend/quarantine/*
+!backend/quarantine/.gitkeep
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
 
 # IDEs
 .vscode/
