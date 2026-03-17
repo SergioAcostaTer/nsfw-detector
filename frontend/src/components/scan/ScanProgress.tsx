@@ -3,31 +3,34 @@ export function ScanProgress({
   flagged,
   total,
   progress,
+  currentFile,
 }: {
   running?: boolean;
   flagged?: number;
   total?: number;
   progress?: number;
+  currentFile?: string;
 }) {
-  if (running) {
-    return (
-      <div className="rounded-lg p-3 text-sm" style={{ background: "var(--bg-elevated)", color: "var(--text-muted)" }}>
-        Scanning in progress... {flagged ?? 0} flagged so far ({progress ?? 0}%)
-      </div>
-    );
-  }
+  if (!running && !total) return null;
 
-  if ((total ?? 0) > 0) {
-    return (
-      <div
-        className="rounded-lg p-3 text-sm"
-        style={{ background: "rgba(16, 185, 129, 0.08)", border: "1px solid rgba(16, 185, 129, 0.18)" }}
-      >
-        Last scan: <strong>{total}</strong> files scanned,{" "}
-        <strong style={{ color: "var(--explicit)" }}>{flagged ?? 0}</strong> flagged
+  return (
+    <div className="space-y-3 rounded-lg p-4" style={{ background: "var(--bg-2)", border: "1px solid var(--line)" }}>
+      <div className="h-0.5 w-full overflow-hidden rounded-full" style={{ background: "var(--bg-3)" }}>
+        <div className="h-full transition-all duration-300" style={{ width: `${progress ?? 0}%`, background: "var(--blue)" }} />
       </div>
-    );
-  }
 
-  return null;
+      <div className="flex items-center justify-between text-xs" style={{ color: "var(--ink-2)" }}>
+        <span>{running ? "Scanning..." : "Complete"}</span>
+        <span className="font-mono" style={{ fontFamily: "var(--font-mono)" }}>
+          {flagged ?? 0} flagged / {total ?? 0} total · {progress ?? 0}%
+        </span>
+      </div>
+
+      {running && currentFile ? (
+        <p className="truncate text-xs font-mono" style={{ color: "var(--ink-3)", fontFamily: "var(--font-mono)" }}>
+          → {currentFile}
+        </p>
+      ) : null}
+    </div>
+  );
 }

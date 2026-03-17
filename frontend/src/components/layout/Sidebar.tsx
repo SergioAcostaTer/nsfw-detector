@@ -1,46 +1,63 @@
-import { Archive, Image, LayoutDashboard, ScanLine, Settings, Shield } from "lucide-react";
+import { useState } from "react";
+import { Archive, ImageIcon, LayoutDashboard, ScanLine, Settings, Shield } from "lucide-react";
 import { NavLink } from "react-router-dom";
 
 const links = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
   { to: "/scan", icon: ScanLine, label: "Scan" },
-  { to: "/review", icon: Image, label: "Review" },
+  { to: "/review", icon: ImageIcon, label: "Review" },
   { to: "/quarantine", icon: Archive, label: "Quarantine" },
   { to: "/settings", icon: Settings, label: "Settings" },
 ];
 
 export function Sidebar() {
+  const [expanded, setExpanded] = useState(false);
+
   return (
     <aside
-      className="fixed inset-y-0 left-0 z-10 w-56 border-r backdrop-blur"
-      style={{ background: "rgba(17, 19, 24, 0.92)", borderColor: "var(--border)" }}
+      onMouseEnter={() => setExpanded(true)}
+      onMouseLeave={() => setExpanded(false)}
+      className="fixed inset-y-0 left-0 z-20 flex flex-col transition-all duration-200"
+      style={{
+        width: expanded ? "176px" : "48px",
+        background: "var(--bg-1)",
+        borderRight: "1px solid var(--line)",
+        overflow: "hidden",
+      }}
     >
-      <div className="flex items-center gap-2 border-b px-5 py-5" style={{ borderColor: "var(--border)" }}>
-        <Shield size={20} style={{ color: "var(--accent)" }} />
-        <span className="text-sm font-semibold tracking-tight">NSFW Scanner</span>
+      <div className="flex h-12 shrink-0 items-center justify-center" style={{ borderBottom: "1px solid var(--line)" }}>
+        <Shield size={16} style={{ color: "var(--blue)", flexShrink: 0 }} />
       </div>
 
-      <nav className="space-y-1 p-3">
+      <nav className="flex flex-1 flex-col gap-0.5 p-1.5">
         {links.map(({ to, icon: Icon, label }) => (
           <NavLink
             key={to}
             to={to}
             end={to === "/"}
             className={({ isActive }) =>
-              `flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-all duration-150 ${
-                isActive ? "font-medium text-white" : "text-gray-400 hover:bg-white/5 hover:text-gray-200"
+              `flex items-center gap-2.5 whitespace-nowrap rounded px-2.5 py-2 transition-colors ${
+                isActive ? "" : "hover:bg-white/5"
               }`
             }
-            style={({ isActive }) => (isActive ? { background: "var(--accent)", color: "#fff" } : {})}
+            style={({ isActive }) => ({
+              background: isActive ? "var(--blue-dim)" : undefined,
+              color: isActive ? "var(--blue)" : "var(--ink-2)",
+            })}
           >
-            <Icon size={15} />
-            {label}
+            <Icon size={15} style={{ flexShrink: 0 }} />
+            <span className="text-xs font-medium transition-opacity duration-150" style={{ opacity: expanded ? 1 : 0 }}>
+              {label}
+            </span>
           </NavLink>
         ))}
       </nav>
 
-      <div className="absolute inset-x-0 bottom-0 px-5 py-3 text-xs" style={{ color: "var(--text-muted)" }}>
-        v2.0 - Local Only
+      <div
+        className="overflow-hidden whitespace-nowrap px-2.5 py-3 text-xs transition-opacity"
+        style={{ color: "var(--ink-3)", opacity: expanded ? 1 : 0 }}
+      >
+        v2.0 · local
       </div>
     </aside>
   );

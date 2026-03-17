@@ -42,6 +42,6 @@ The Vite dev server proxies `/api/*` to the backend.
 
 ## Notes
 
-- Existing legacy CLI/Streamlit files remain in the repo, but the new app lives under `backend/` and `frontend/`.
 - Quarantined files are served only through `/api/image?path=...`.
+- Review and quarantine grids use `/api/thumbnail?path=...` for lightweight previews.
 - Database migrations run automatically on FastAPI startup.

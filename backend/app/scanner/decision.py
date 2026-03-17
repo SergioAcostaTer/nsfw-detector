@@ -1,7 +1,10 @@
-from app.config import BORDERLINE_THRESHOLD, EXPLICIT_THRESHOLD
+from app.settings import load_settings
 
 
 def decide(detections):
+    settings = load_settings()
+    explicit_threshold = settings.get("explicit_threshold", 0.6)
+    borderline_threshold = settings.get("borderline_threshold", 0.4)
     max_score = 0.0
     classes = []
 
@@ -13,10 +16,10 @@ def decide(detections):
 
     if any(
         klass in classes for klass in ("EXPOSED_GENITALIA_F", "EXPOSED_GENITALIA_M")
-    ) and max_score > EXPLICIT_THRESHOLD:
+    ) and max_score > explicit_threshold:
         return "explicit", max_score
 
-    if max_score > BORDERLINE_THRESHOLD:
+    if max_score > borderline_threshold:
         return "borderline", max_score
 
     return "safe", max_score

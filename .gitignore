@@ -11,7 +11,6 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
 lib64/
 parts/
 sdist/
@@ -26,16 +25,13 @@ venv/
 ENV/
 
 # Database
-data/*.db
 backend/data/*.db
 
 # Models
-models/*.onnx
 backend/models/*.onnx
 !backend/models/.gitkeep
 
 # Quarantine
-quarantine/
 backend/quarantine/*
 !backend/quarantine/.gitkeep
 

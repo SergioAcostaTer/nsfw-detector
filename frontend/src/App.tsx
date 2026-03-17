@@ -18,11 +18,11 @@ function AppShell() {
   }, []);
 
   return (
-    <BrowserRouter>
-      <div className="flex min-h-screen">
-        <Sidebar />
-        <main className="ml-56 min-h-screen flex-1" style={{ background: "transparent" }}>
-          <Routes>
+      <BrowserRouter>
+        <div className="flex min-h-screen">
+          <Sidebar />
+          <main className="ml-12 min-h-screen flex-1" style={{ background: "transparent" }}>
+            <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/scan" element={<Scan />} />
             <Route path="/review" element={<Review />} />

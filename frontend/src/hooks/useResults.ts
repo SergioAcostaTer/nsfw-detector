@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { deleteFiles, getResults, quarantineFiles } from "@/api/client";
+import { deleteFiles, getResults, getResultsCount, quarantineFiles } from "@/api/client";
 
 export function useResults(filter: string) {
   const queryClient = useQueryClient();
@@ -15,15 +15,26 @@ export function useResults(filter: string) {
       }).then((response) => response.data),
   });
 
+  const counts = useQuery({
+    queryKey: ["resultsCount"],
+    queryFn: () => getResultsCount().then((response) => response.data),
+  });
+
   const quarantine = useMutation({
     mutationFn: (ids: number[]) => quarantineFiles(ids),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["results"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["results"] });
+      queryClient.invalidateQueries({ queryKey: ["resultsCount"] });
+    },
   });
 
   const remove = useMutation({
     mutationFn: (ids: number[]) => deleteFiles(ids),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["results"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["results"] });
+      queryClient.invalidateQueries({ queryKey: ["resultsCount"] });
+    },
   });
 
-  return { results, quarantine, remove };
+  return { results, counts, quarantine, remove };
 }

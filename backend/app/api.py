@@ -8,8 +8,7 @@ import csv
 from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, Response, StreamingResponse
 from pydantic import BaseModel
 
 from app.actions.delete import delete_file
@@ -20,6 +19,7 @@ from app.db.migrate import run_migrations
 from app.db.models import init_db
 from app.jobs.auto_delete import run_auto_delete
 from app.scanner.scan import scan_folder
+from app.scanner.thumbnail import make_thumbnail
 from app.settings import load_settings, save_settings
 
 app = FastAPI(title="NSFW Scanner API", version="2.0")
@@ -42,9 +42,17 @@ class ActionRequest(BaseModel):
 
 class SettingsRequest(BaseModel):
     gpu_enabled: bool
+    explicit_threshold: float
+    borderline_threshold: float
 
 
-_scan_status = {"running": False, "progress": 0, "total": 0, "flagged": 0}
+_scan_status = {
+    "running": False,
+    "progress": 0,
+    "total": 0,
+    "flagged": 0,
+    "current_file": "",
+}
 _scheduler: BackgroundScheduler | None = None
 
 
@@ -103,17 +111,25 @@ def start_scan(req: ScanRequest):
     conn.commit()
     session_id = session.lastrowid
 
-    def update_progress(index: int, total: int, flagged: int):
+    def update_progress(index: int, total: int, flagged: int, current_file: str = ""):
         progress = int((index / total) * 100) if total else 100
         _scan_status.update(
-            {"running": True, "progress": progress, "total": total, "flagged": flagged}
+            {
+                "running": True,
+                "progress": progress,
+                "total": total,
+                "flagged": flagged,
+                "current_file": current_file,
+            }
         )
 
     def run():
         try:
-            _scan_status.update({"running": True, "progress": 0, "total": 0, "flagged": 0})
+            _scan_status.update(
+                {"running": True, "progress": 0, "total": 0, "flagged": 0, "current_file": ""}
+            )
             result = scan_folder(target, session_id=session_id, progress_callback=update_progress)
-            _scan_status.update({"running": False, "progress": 100, **result})
+            _scan_status.update({"running": False, "progress": 100, "current_file": "", **result})
         except Exception:
             failed_conn = get_conn()
             failed_conn.execute(
@@ -121,7 +137,7 @@ def start_scan(req: ScanRequest):
                 (int(time.time()), session_id),
             )
             failed_conn.commit()
-            _scan_status["running"] = False
+            _scan_status.update({"running": False, "current_file": ""})
             raise
 
     threading.Thread(target=run, daemon=True).start()
@@ -212,12 +228,37 @@ def get_results(
     }
 
 
+@app.get("/results/count")
+def get_results_count():
+    conn = get_conn()
+    rows = conn.execute(
+        """
+        SELECT r.decision, COUNT(*) AS cnt
+        FROM (SELECT file_id, MAX(created_at) AS ca FROM results GROUP BY file_id) latest
+        JOIN results r ON r.file_id = latest.file_id AND r.created_at = latest.ca
+        JOIN files f ON f.id = r.file_id
+        WHERE f.status = 'active' AND r.decision != 'safe'
+        GROUP BY r.decision
+        """
+    ).fetchall()
+    return {row[0]: row[1] for row in rows}
+
+
 @app.get("/image")
 def serve_image(path: str = Query(...)):
     image_path = Path(path)
     if not image_path.exists():
         raise HTTPException(status_code=404, detail="Image not found")
     return FileResponse(str(image_path))
+
+
+@app.get("/thumbnail")
+def serve_thumbnail(path: str = Query(...), size: int = Query(400)):
+    image_path = Path(path)
+    if not image_path.exists():
+        raise HTTPException(status_code=404, detail="Image not found")
+    data = make_thumbnail(image_path, max_size=size)
+    return Response(content=data, media_type="image/webp")
 
 
 @app.post("/quarantine")
@@ -290,6 +331,12 @@ def delete_files(req: ActionRequest):
 
     conn.commit()
     return {"deleted": deleted}
+
+
+@app.delete("/quarantine/expired")
+def trigger_auto_delete():
+    count = run_auto_delete()
+    return {"deleted": count}
 
 
 @app.get("/stats")

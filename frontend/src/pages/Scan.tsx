@@ -25,7 +25,7 @@ export function Scan() {
 
       <div
         className="mt-8 space-y-5 rounded-xl p-6"
-        style={{ background: "var(--bg-surface)", border: "1px solid var(--border)" }}
+        style={{ background: "var(--bg-1)", border: "1px solid var(--line)" }}
         onDragOver={(event) => event.preventDefault()}
         onDrop={onDrop}
       >
@@ -33,7 +33,7 @@ export function Scan() {
 
         <div
           className="rounded-lg border border-dashed px-4 py-3 text-sm"
-          style={{ borderColor: "var(--border)", color: "var(--text-muted)", background: "var(--bg-elevated)" }}
+          style={{ borderColor: "var(--line)", color: "var(--ink-2)", background: "var(--bg-2)" }}
         >
           Drag a folder here if your browser exposes `File.path`; otherwise paste the folder path manually.
         </div>
@@ -42,7 +42,7 @@ export function Scan() {
           onClick={() => start.mutate()}
           disabled={!folder || start.isPending || status.data?.running}
           className="flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-medium transition-all disabled:opacity-40"
-          style={{ background: "var(--accent)", color: "#fff" }}
+          style={{ background: "var(--blue)", color: "#fff" }}
         >
           {status.data?.running ? (
             <>
@@ -60,6 +60,7 @@ export function Scan() {
           flagged={status.data?.flagged}
           total={status.data?.total}
           progress={status.data?.progress}
+          currentFile={status.data?.current_file}
         />
       </div>
     </div>

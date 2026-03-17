@@ -19,7 +19,7 @@ export function Quarantine() {
       <TopBar title="Quarantine" subtitle="Files are permanently deleted after 30 days" />
 
       {items.length === 0 ? (
-        <div className="py-24 text-center" style={{ color: "var(--text-muted)" }}>
+        <div className="py-24 text-center" style={{ color: "var(--ink-2)" }}>
           Quarantine is empty
         </div>
       ) : (

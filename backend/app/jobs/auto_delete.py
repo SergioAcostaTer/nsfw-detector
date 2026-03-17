@@ -20,13 +20,10 @@ def run_auto_delete():
         (cutoff,),
     ).fetchall()
 
-    deleted_at = int(time.time())
     for file_id, path in rows:
         delete_file(path)
-        conn.execute(
-            "UPDATE files SET status='deleted', deleted_at=? WHERE id=?",
-            (deleted_at, file_id),
-        )
+        conn.execute("DELETE FROM results WHERE file_id = ?", (file_id,))
+        conn.execute("DELETE FROM files WHERE id = ?", (file_id,))
 
     conn.commit()
     return len(rows)

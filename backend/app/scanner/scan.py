@@ -21,17 +21,41 @@ def scan_folder(folder: Path, session_id: int | None = None, progress_callback=N
 
     for index, path in enumerate(tqdm(files), start=1):
         try:
-            stat = path.stat()
-
-            existing = conn.execute(
-                "SELECT mtime FROM files WHERE path = ?", (str(path),)
+            existing_status = conn.execute(
+                "SELECT status, mtime FROM files WHERE path = ?", (str(path),)
             ).fetchone()
 
-            if existing and existing[0] == stat.st_mtime:
+            if existing_status and existing_status[0] in ("quarantined", "deleted"):
+                if progress_callback:
+                    progress_callback(
+                        index=index,
+                        total=len(files),
+                        flagged=flagged,
+                        current_file=str(path.name),
+                    )
+                continue
+
+            stat = path.stat()
+
+            if existing_status and existing_status[1] == stat.st_mtime:
+                if progress_callback:
+                    progress_callback(
+                        index=index,
+                        total=len(files),
+                        flagged=flagged,
+                        current_file=str(path.name),
+                    )
                 continue
 
             image = cv2.imread(str(path))
             if image is None:
+                if progress_callback:
+                    progress_callback(
+                        index=index,
+                        total=len(files),
+                        flagged=flagged,
+                        current_file=str(path.name),
+                    )
                 continue
 
             file_hash = hash_file(path)
@@ -80,7 +104,12 @@ def scan_folder(folder: Path, session_id: int | None = None, progress_callback=N
             print(f"Error processing {path}: {exc}")
         finally:
             if progress_callback:
-                progress_callback(index=index, total=len(files), flagged=flagged)
+                progress_callback(
+                    index=index,
+                    total=len(files),
+                    flagged=flagged,
+                    current_file=str(path.name),
+                )
 
     if session_id:
         conn.execute(

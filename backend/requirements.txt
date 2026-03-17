@@ -1,8 +1,11 @@
-fastapi
-uvicorn[standard]
+# If you have an NVIDIA GPU with CUDA 12+, keep onnxruntime-gpu.
+# Otherwise comment it out - onnxruntime (CPU) is sufficient.
+fastapi>=0.115
+uvicorn[standard]>=0.30
 python-multipart
-onnxruntime-gpu
-opencv-python-headless
-Pillow
+onnxruntime>=1.19
+onnxruntime-gpu>=1.19
+opencv-python-headless>=4.10
+Pillow>=10.0
 tqdm
-apscheduler
+apscheduler>=3.10

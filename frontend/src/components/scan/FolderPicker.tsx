@@ -13,9 +13,10 @@ export function FolderPicker({ value, onChange }: FolderPickerProps) {
         placeholder="C:\\Users\\YourName\\Pictures or /home/user/images"
         className="w-full rounded-lg px-3 py-2 text-sm font-mono outline-none"
         style={{
-          background: "var(--bg-elevated)",
-          border: "1px solid var(--border)",
-          color: "var(--text-primary)",
+          background: "var(--bg-2)",
+          border: "1px solid var(--line)",
+          color: "var(--ink-1)",
+          fontFamily: "var(--font-mono)",
         }}
       />
     </div>

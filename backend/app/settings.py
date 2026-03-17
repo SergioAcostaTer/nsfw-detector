@@ -4,7 +4,11 @@ from pathlib import Path
 from app.config import BASE_DIR
 
 SETTINGS_PATH = BASE_DIR / "data" / "settings.json"
-DEFAULT_SETTINGS = {"gpu_enabled": True}
+DEFAULT_SETTINGS = {
+    "gpu_enabled": True,
+    "explicit_threshold": 0.6,
+    "borderline_threshold": 0.4,
+}
 
 
 def load_settings():
