@@ -1,0 +1,5 @@
+{
+  "gpu_enabled": true,
+  "explicit_threshold": 0.6,
+  "borderline_threshold": 0.4
+}
