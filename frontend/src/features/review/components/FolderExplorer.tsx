@@ -12,23 +12,28 @@ export type ReviewTreeNode = {
   children: ReviewTreeNode[];
 };
 
+function normalizeFolderPath(path: string) {
+  return path.replace(/\\/g, "/");
+}
+
 export function buildExplorerTree(folders: FolderSummary[], completedFolders: Set<string>) {
   type MutableNode = ReviewTreeNode & { childMap: Map<string, MutableNode> };
   const root = new Map<string, MutableNode>();
 
   for (const folder of folders.filter((entry) => entry.flagged > 0)) {
-    const parts = folder.folder.split(/[\\/]/).filter(Boolean);
+    const normalizedFolder = normalizeFolderPath(folder.folder);
+    const parts = normalizedFolder.split("/").filter(Boolean);
     let branch = root;
     let currentPath = "";
 
     for (const part of parts) {
-      currentPath = currentPath ? `${currentPath}\\${part}` : part;
+      currentPath = currentPath ? `${currentPath}/${part}` : part;
       let node = branch.get(currentPath);
       if (!node) {
         node = {
           name: part,
           path: currentPath,
-          selectPath: folder.folder,
+          selectPath: normalizedFolder,
           flagged: 0,
           triaged: false,
           children: [],
@@ -37,7 +42,7 @@ export function buildExplorerTree(folders: FolderSummary[], completedFolders: Se
         branch.set(currentPath, node);
       }
       node.flagged += folder.flagged;
-      node.selectPath = node.selectPath || folder.folder;
+      node.selectPath = node.selectPath || normalizedFolder;
       branch = node.childMap;
     }
   }

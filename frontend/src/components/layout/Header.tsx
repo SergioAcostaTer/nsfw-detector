@@ -4,6 +4,8 @@ import { Command, Search } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import { getResults, getScanStatus, thumbnailUrl } from "@/api/client";
+import { appStore } from "@/app/store";
+import { Badge, Kbd, ProgressBar } from "@/components/ui";
 import { filenameFromPath } from "@/shared/lib/format";
 import { queryKeys } from "@/shared/lib/queryKeys";
 
@@ -49,19 +51,19 @@ export function Header() {
 
   return (
     <header
-      className="fixed left-[220px] right-0 top-0 z-30 flex h-16 items-center justify-between border-b px-6 backdrop-blur"
-      style={{ background: "rgba(10, 12, 14, 0.82)", borderColor: "var(--line)" }}
+      className="fixed left-[240px] right-0 top-0 z-30 flex h-12 items-center justify-between border-b px-6 backdrop-blur"
+      style={{ background: "color-mix(in srgb, var(--surface-base) 78%, transparent)", borderColor: "var(--line)" }}
     >
-      <div>
-        <p className="text-xs uppercase tracking-[0.2em]" style={{ color: "var(--ink-3)" }}>
-          Local moderation
+      <div className="min-w-[180px]">
+        <p className="text-[10px] uppercase tracking-[0.24em]" style={{ color: "var(--ink-3)" }}>
+          Triage Machine
         </p>
         <p className="text-sm font-semibold">NSFW Scanner</p>
       </div>
 
-      <div className="relative w-full max-w-xl">
+      <div className="relative w-full max-w-2xl">
         <div
-          className="flex items-center gap-3 rounded-2xl border px-3 py-2"
+          className="flex items-center gap-3 rounded-2xl border px-3 py-1.5"
           style={{ background: "var(--bg-1)", borderColor: focused ? "var(--blue)" : "var(--line)" }}
         >
           <Search size={16} style={{ color: "var(--ink-3)" }} />
@@ -74,12 +76,9 @@ export function Header() {
             placeholder="Search flagged files"
             className="w-full bg-transparent text-sm outline-none"
           />
-          <span
-            className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px]"
-            style={{ background: "var(--bg-2)", color: "var(--ink-2)" }}
-          >
-            <Command size={12} /> K
-          </span>
+          <div className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px]" style={{ background: "var(--bg-2)", color: "var(--ink-2)" }}>
+            <Command size={12} /> <Kbd>K</Kbd>
+          </div>
         </div>
 
         {focused ? (
@@ -101,7 +100,10 @@ export function Header() {
                   key={item.id}
                   onMouseDown={(event) => event.preventDefault()}
                   onClick={() => {
-                    navigate(`/review?decision=${item.decision}`);
+                    appStore.setActiveFolder(normalizePath(item.folder));
+                    appStore.setActiveFilter(item.decision === "safe" ? "all" : item.decision);
+                    appStore.setLastFocusedId(item.id);
+                    navigate(item.decision === "safe" ? "/review" : `/review?decision=${item.decision}`);
                     setFocused(false);
                   }}
                   className="flex w-full items-center gap-3 border-b px-4 py-3 text-left last:border-b-0"
@@ -114,15 +116,7 @@ export function Header() {
                       {item.folder}{item.type === "video" ? ` · video${item.frame_count ? ` · ${item.frame_count}f` : ""}` : ""}
                     </p>
                   </div>
-                  <span
-                    className="rounded-full px-2 py-1 text-[11px] uppercase"
-                    style={{
-                      background: item.decision === "explicit" ? "var(--red-dim)" : "var(--amber-dim)",
-                      color: item.decision === "explicit" ? "var(--red)" : "var(--amber)",
-                    }}
-                  >
-                    {item.decision}
-                  </span>
+                  <Badge tone={item.decision === "explicit" ? "explicit" : "borderline"}>{item.decision}</Badge>
                 </button>
               ))
             )}
@@ -130,13 +124,23 @@ export function Header() {
         ) : null}
       </div>
 
-      <div className="flex items-center gap-2 text-xs" style={{ color: "var(--ink-2)" }}>
-        <span
-          className="h-2.5 w-2.5 rounded-full"
-          style={{ background: status?.running ? "var(--blue)" : "var(--green)" }}
-        />
-        {status?.running ? "Scan active" : "Idle"}
+      <div className="min-w-[180px]">
+        {status?.running ? (
+          <div className="space-y-1">
+            <div className="flex items-center justify-end gap-2 text-xs text-[var(--ink-2)]">
+              <span className="h-2 w-2 rounded-full bg-[var(--accent-primary)]" />
+              <span>Scanning {status.progress}%</span>
+            </div>
+            <ProgressBar value={status.progress} />
+          </div>
+        ) : (
+          <div className="flex items-center justify-end gap-2 text-xs" style={{ color: "var(--ink-2)" }}>
+            <span className="h-2.5 w-2.5 rounded-full" style={{ background: "var(--green)" }} />
+            Idle
+          </div>
+        )}
       </div>
     </header>
   );
 }
+  const normalizePath = (path: string) => path.replace(/\\/g, "/");

@@ -1,6 +1,7 @@
-import { AlertCircle, Calendar, HardDrive, Video } from "lucide-react";
+import { AlertCircle, Archive, Calendar, HardDrive, ShieldCheck, Trash2, Video } from "lucide-react";
 
 import { imageUrl, type ScanResult } from "@/api/client";
+import { Button, Kbd } from "@/components/ui";
 import { filenameFromPath, formatDuration, formatPercent, formatTimeAgo } from "@/shared/lib/format";
 
 function parseClasses(value: string) {
@@ -14,7 +15,17 @@ function parseClasses(value: string) {
   }
 }
 
-export function FileDetailsPane({ item }: { item: ScanResult | null }) {
+export function FileDetailsPane({
+  item,
+  onRescue,
+  onQuarantine,
+  onDelete,
+}: {
+  item: ScanResult | null;
+  onRescue?: (item: ScanResult) => void;
+  onQuarantine?: (item: ScanResult) => void;
+  onDelete?: (item: ScanResult) => void;
+}) {
   if (!item) {
     return (
       <div className="flex h-full flex-col items-center justify-center p-6 text-center text-[var(--ink-2)]">
@@ -66,6 +77,28 @@ export function FileDetailsPane({ item }: { item: ScanResult | null }) {
         ) : null}
       </div>
 
+      <div className="space-y-2 border-t border-[var(--line)] pt-4">
+        <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--ink-2)]">Quick Actions</h4>
+        <Button variant="success" className="w-full justify-between" onClick={() => onRescue?.(item)}>
+          <span className="flex items-center gap-2">
+            <ShieldCheck size={16} /> Mark as Safe
+          </span>
+          <Kbd>S</Kbd>
+        </Button>
+        <Button variant="ghost" className="w-full justify-between text-[var(--status-quarantine)]" onClick={() => onQuarantine?.(item)}>
+          <span className="flex items-center gap-2">
+            <Archive size={16} /> Move to Quarantine
+          </span>
+          <Kbd>Q</Kbd>
+        </Button>
+        <Button variant="danger" className="w-full justify-between" onClick={() => onDelete?.(item)}>
+          <span className="flex items-center gap-2">
+            <Trash2 size={16} /> Delete Permanently
+          </span>
+          <Kbd>D</Kbd>
+        </Button>
+      </div>
+
       <div className="space-y-3 border-t border-[var(--line)] pt-4 text-sm">
         <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--ink-2)]">Properties</h4>
         <div className="flex justify-between">
@@ -82,6 +115,12 @@ export function FileDetailsPane({ item }: { item: ScanResult | null }) {
             <span className="text-[var(--ink-1)]">{formatDuration(item.duration || 0)}</span>
           </div>
         ) : null}
+        <div className="flex justify-between gap-3">
+          <span className="text-[var(--ink-3)]">Folder</span>
+          <span className="max-w-[180px] truncate text-right text-[var(--ink-1)]" title={item.folder}>
+            {item.folder}
+          </span>
+        </div>
       </div>
     </div>
   );
