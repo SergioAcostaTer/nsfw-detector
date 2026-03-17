@@ -13,7 +13,7 @@ export type {
 } from "@/shared/types/api";
 export { getSessions } from "@/features/activity/api";
 export { deleteExpiredQuarantine, deleteFiles, quarantineFiles, restoreFiles } from "@/features/quarantine/api";
-export { getFolders, getResults, getResultsCount, getSessionResults, getStats } from "@/features/review/api";
+export { getFolders, getResults, getResultsCount, getSessionResults, getStats, rescueFiles, unrescueFiles } from "@/features/review/api";
 export { cancelScan, getScanStatus, startPcScan, startScan } from "@/features/scan/api";
 export { getSettings, resetAppState, updateSettings } from "@/features/settings/api";
 

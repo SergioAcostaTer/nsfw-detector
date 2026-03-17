@@ -11,6 +11,31 @@ class ResultsRepository:
             records,
         )
 
+    def insert_safe_overrides(self, file_ids: list[int], *, created_at: int, classes: str = "USER_RESCUED"):
+        if not file_ids:
+            return
+        self.conn.executemany(
+            """
+            INSERT INTO results (file_id, score, decision, classes, created_at, avg_score, max_score)
+            VALUES (?, 0.0, 'safe', ?, ?, 0.0, 0.0)
+            """,
+            [(file_id, classes, created_at) for file_id in file_ids],
+        )
+
+    def delete_safe_overrides(self, file_ids: list[int], *, classes: str = "USER_RESCUED"):
+        if not file_ids:
+            return
+        placeholders = ",".join("?" for _ in file_ids)
+        self.conn.execute(
+            f"""
+            DELETE FROM results
+            WHERE file_id IN ({placeholders})
+              AND decision = 'safe'
+              AND classes = ?
+            """,
+            (*file_ids, classes),
+        )
+
     def get_latest_results(self, *, decision=None, folder=None, status="active", limit=100, offset=0, search=None):
         filters = ["r.decision != 'safe'"]
         params: list[object] = []

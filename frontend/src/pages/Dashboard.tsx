@@ -5,24 +5,20 @@ import { Link } from "react-router-dom";
 import { exportCsvUrl, getFolders, getStats } from "@/api/client";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { EmptyState, StatPill } from "@/components/ui";
-
-function formatTimeAgo(timestamp: number | null) {
-  if (!timestamp) {
-    return "Never";
-  }
-  const diff = Math.max(0, Math.floor(Date.now() / 1000) - timestamp);
-  if (diff < 3600) {
-    return `${Math.max(1, Math.floor(diff / 60))}m ago`;
-  }
-  if (diff < 86400) {
-    return `${Math.floor(diff / 3600)}h ago`;
-  }
-  return `${Math.floor(diff / 86400)}d ago`;
-}
+import { formatTimeAgo } from "@/shared/lib/format";
+import { queryKeys } from "@/shared/lib/queryKeys";
 
 export function Dashboard() {
-  const { data: stats } = useQuery({ queryKey: ["stats"], queryFn: () => getStats().then((response) => response.data) });
-  const { data: folders } = useQuery({ queryKey: ["folders"], queryFn: () => getFolders().then((response) => response.data) });
+  const { data: stats } = useQuery({
+    queryKey: queryKeys.stats,
+    queryFn: () => getStats().then((response) => response.data),
+    refetchInterval: 5000,
+  });
+  const { data: folders } = useQuery({
+    queryKey: queryKeys.folders,
+    queryFn: () => getFolders().then((response) => response.data),
+    refetchInterval: 5000,
+  });
 
   const decisions = stats?.decisions ?? {};
   const statCards = [

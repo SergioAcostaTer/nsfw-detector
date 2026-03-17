@@ -5,12 +5,14 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse, Response
 
+from app.api.schemas import ActionRequest
 from app.infrastructure.db.repositories.files_repository import FilesRepository
 from app.infrastructure.db.repositories.results_repository import ResultsRepository
 from app.infrastructure.db.repositories.sessions_repository import SessionsRepository
 from app.db.session import get_db
 from app.scanner.file_utils import hash_file
 from app.scanner.thumbnail import make_thumbnail
+from app.shared.utils import now_ms
 
 router = APIRouter()
 
@@ -33,6 +35,32 @@ def get_results(
 def get_results_count():
     with get_db() as conn:
         return ResultsRepository(conn).get_result_counts()
+
+
+@router.post("/results/rescue")
+def rescue_results(req: ActionRequest):
+    rescued = []
+    with get_db() as conn:
+        files_repo = FilesRepository(conn)
+        results_repo = ResultsRepository(conn)
+        valid_ids = []
+        for file_id in req.file_ids:
+            record = files_repo.get_by_id(file_id)
+            if record is None or record["status"] != "active":
+                continue
+            valid_ids.append(file_id)
+            rescued.append({"id": file_id, "path": record["path"]})
+        results_repo.insert_safe_overrides(valid_ids, created_at=now_ms())
+        conn.commit()
+    return {"rescued": rescued}
+
+
+@router.post("/results/unrescue")
+def unrescue_results(req: ActionRequest):
+    with get_db() as conn:
+        ResultsRepository(conn).delete_safe_overrides(req.file_ids)
+        conn.commit()
+    return {"unrescued": req.file_ids}
 
 
 @router.get("/stats")

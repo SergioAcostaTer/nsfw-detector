@@ -11,12 +11,21 @@ import { ScanAllCard } from "@/components/scan/ScanAllCard";
 import { ScanProgress } from "@/components/scan/ScanProgress";
 import { EmptyState } from "@/components/ui";
 import { useScan } from "@/hooks/useScan";
+import { queryKeys } from "@/shared/lib/queryKeys";
 
 export function Scan() {
   const [folder, setFolder] = useState("");
   const { start, startPc, cancel, status } = useScan(folder);
-  const { data: folders } = useQuery({ queryKey: ["folders"], queryFn: () => getFolders().then((response) => response.data) });
-  const { data: sessions } = useQuery({ queryKey: ["sessions", 3], queryFn: () => getSessions(3).then((response) => response.data) });
+  const { data: folders } = useQuery({
+    queryKey: queryKeys.folders,
+    queryFn: () => getFolders().then((response) => response.data),
+    refetchInterval: status.data?.running ? 5000 : false,
+  });
+  const { data: sessions } = useQuery({
+    queryKey: queryKeys.sessions(3),
+    queryFn: () => getSessions(3).then((response) => response.data),
+    refetchInterval: status.data?.running ? 2000 : 5000,
+  });
 
   const onDrop: DragEventHandler<HTMLDivElement> = (event) => {
     event.preventDefault();

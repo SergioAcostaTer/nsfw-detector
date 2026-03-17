@@ -4,6 +4,8 @@ type ToastItem = {
   id: number;
   title: string;
   variant?: "default" | "error";
+  actionLabel?: string;
+  onAction?: () => void;
 };
 
 type ToastInput = Omit<ToastItem, "id">;
@@ -39,12 +41,24 @@ export function ToastContainer() {
           className="pointer-events-auto rounded-2xl px-4 py-3 shadow-xl transition-transform"
           style={{
             background: "var(--bg-1)",
-            border: `1px solid ${item.variant === "error" ? "rgba(220, 38, 38, 0.35)" : "var(--line)"}`,
-            color: item.variant === "error" ? "var(--red)" : "var(--ink-1)",
-            animation: "toast-slide 0.2s ease-out",
-          }}
-        >
-          <p className="text-sm font-medium">{item.title}</p>
+              border: `1px solid ${item.variant === "error" ? "rgba(220, 38, 38, 0.35)" : "var(--line)"}`,
+              color: item.variant === "error" ? "var(--red)" : "var(--ink-1)",
+              animation: "toast-slide 0.2s ease-out",
+            }}
+          >
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm font-medium">{item.title}</p>
+            {item.actionLabel && item.onAction ? (
+              <button
+                type="button"
+                onClick={item.onAction}
+                className="rounded-lg px-2 py-1 text-xs font-semibold"
+                style={{ background: "var(--bg-2)", color: "var(--ink-1)" }}
+              >
+                {item.actionLabel}
+              </button>
+            ) : null}
+          </div>
         </div>
       ))}
     </div>

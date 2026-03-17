@@ -6,6 +6,8 @@ import { useState } from "react";
 import { getSessionResults, getSessions } from "@/api/client";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { EmptyState } from "@/components/ui";
+import { formatTimeAgo } from "@/shared/lib/format";
+import { queryKeys } from "@/shared/lib/queryKeys";
 
 const STATUS_STYLES: Record<string, { bg: string; color: string }> = {
   done: { bg: "var(--green-dim)", color: "var(--green)" },
@@ -14,26 +16,15 @@ const STATUS_STYLES: Record<string, { bg: string; color: string }> = {
   cancelled: { bg: "var(--amber-dim)", color: "var(--amber)" },
 };
 
-function formatTimeAgo(timestamp: number) {
-  const tsSeconds = timestamp > 10_000_000_000 ? Math.floor(timestamp / 1000) : timestamp;
-  const diff = Math.max(0, Math.floor(Date.now() / 1000) - tsSeconds);
-  if (diff < 60) {
-    return `${diff}s ago`;
-  }
-  if (diff < 3600) {
-    return `${Math.floor(diff / 60)}m ago`;
-  }
-  if (diff < 86400) {
-    return `${Math.floor(diff / 3600)}h ago`;
-  }
-  return `${Math.floor(diff / 86400)}d ago`;
-}
-
 export function Activity() {
   const [expanded, setExpanded] = useState<number | null>(null);
-  const { data: sessions } = useQuery({ queryKey: ["sessions"], queryFn: () => getSessions().then((response) => response.data) });
+  const { data: sessions } = useQuery({
+    queryKey: queryKeys.sessions(),
+    queryFn: () => getSessions().then((response) => response.data),
+    refetchInterval: 5000,
+  });
   const { data: sessionResults } = useQuery({
-    queryKey: ["sessionResults", expanded],
+    queryKey: queryKeys.sessionResults(expanded),
     queryFn: () => getSessionResults(expanded as number).then((response) => response.data),
     enabled: expanded !== null,
   });

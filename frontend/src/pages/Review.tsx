@@ -1,99 +1,402 @@
-import { Archive, Trash2 } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
-import { getResults } from "@/api/client";
+import {
+  deleteFiles,
+  getFolders,
+  getResults,
+  getResultsCount,
+  quarantineFiles,
+  rescueFiles,
+  restoreFiles,
+  unrescueFiles,
+  type FolderSummary,
+  type ScanResult,
+} from "@/api/client";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { ImageGrid } from "@/components/review/ImageGrid";
-import { ListView } from "@/components/review/ListView";
-import { ReviewToolbar } from "@/components/review/ReviewToolbar";
-import { ConfirmDialog, EmptyState } from "@/components/ui";
-import { useResults } from "@/hooks/useResults";
+import { ConfirmDialog, EmptyState, toast } from "@/components/ui";
+import { ContextTree, type ReviewTreeNode } from "@/features/review/components/ContextTree";
+import { InspectorPanel } from "@/features/review/components/InspectorPanel";
+import { MassActionBar } from "@/features/review/components/MassActionBar";
+import { TriageCard } from "@/features/review/components/TriageCard";
+import { queryKeys } from "@/shared/lib/queryKeys";
 
-const PAGE_SIZE = 50;
+type ReviewFilter = "all" | "explicit" | "borderline";
 
-function SkeletonCard() {
-  return (
-    <div className="overflow-hidden rounded-3xl border" style={{ borderColor: "var(--line)", background: "var(--bg-1)" }}>
-      <div className="aspect-square animate-pulse" style={{ background: "var(--bg-2)" }} />
-      <div className="border-t px-3 py-3" style={{ borderColor: "var(--line-soft)" }}>
-        <div className="h-9 animate-pulse rounded-xl" style={{ background: "var(--bg-2)" }} />
-      </div>
-    </div>
-  );
+type LastAction =
+  | { type: "rescue"; fileId: number }
+  | { type: "unrescue"; fileId: number }
+  | { type: "quarantine"; fileIds: number[] }
+  | null;
+
+const REVIEW_LIMIT = 1000;
+const FILTERS: ReviewFilter[] = ["all", "explicit", "borderline"];
+
+function getGridColumns() {
+  if (typeof window === "undefined") {
+    return 4;
+  }
+  if (window.innerWidth >= 1536) {
+    return 5;
+  }
+  if (window.innerWidth >= 1280) {
+    return 4;
+  }
+  if (window.innerWidth >= 1024) {
+    return 3;
+  }
+  return 2;
+}
+
+function buildTree(folders: FolderSummary[], completedFolders: Set<string>) {
+  type MutableNode = ReviewTreeNode & { childMap: Map<string, MutableNode> };
+  const root = new Map<string, MutableNode>();
+
+  for (const folder of folders.filter((entry) => entry.flagged > 0)) {
+    const parts = folder.folder.split(/[\\/]/).filter(Boolean);
+    let branch = root;
+    let currentPath = "";
+
+    for (const part of parts) {
+      currentPath = currentPath ? `${currentPath}\\${part}` : part;
+      let node = branch.get(currentPath);
+      if (!node) {
+        node = {
+          name: part,
+          path: currentPath,
+          selectPath: folder.folder,
+          flagged: 0,
+          triaged: false,
+          children: [],
+          childMap: new Map<string, MutableNode>(),
+        };
+        branch.set(currentPath, node);
+      }
+      node.flagged += folder.flagged;
+      node.selectPath = node.selectPath || folder.folder;
+      branch = node.childMap;
+    }
+  }
+
+  const markTriaged = (nodes: Iterable<MutableNode>): ReviewTreeNode[] =>
+    Array.from(nodes)
+      .map((node) => {
+        const children = markTriaged(node.childMap.values());
+        const triaged = completedFolders.has(node.selectPath) || (children.length > 0 && children.every((child) => child.triaged));
+        return {
+          name: node.name,
+          path: node.path,
+          selectPath: node.selectPath,
+          flagged: node.flagged,
+          triaged,
+          children,
+        };
+      })
+      .sort((left, right) => left.name.localeCompare(right.name));
+
+  return markTriaged(root.values());
+}
+
+function toggleId(list: number[], fileId: number) {
+  return list.includes(fileId) ? list.filter((entry) => entry !== fileId) : [...list, fileId];
 }
 
 export function Review() {
+  const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const initialFilter = searchParams.get("decision");
-  const [filter, setFilter] = useState(initialFilter === "explicit" || initialFilter === "borderline" ? initialFilter : "all");
-  const [view, setView] = useState<"grid" | "list">("grid");
-  const [page, setPage] = useState(0);
-  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [filter, setFilter] = useState<ReviewFilter>(
+    initialFilter === "explicit" || initialFilter === "borderline" ? initialFilter : "all",
+  );
+  const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
+  const [rescuedByFolder, setRescuedByFolder] = useState<Record<string, number[]>>({});
+  const [completedFolders, setCompletedFolders] = useState<Set<string>>(new Set());
+  const [focusedId, setFocusedId] = useState<number | null>(null);
+  const [peekMode, setPeekMode] = useState(false);
   const [pendingDeleteIds, setPendingDeleteIds] = useState<number[]>([]);
-  const { results, counts, quarantine, remove } = useResults(filter, page, PAGE_SIZE);
+  const [lastAction, setLastAction] = useState<LastAction>(null);
 
-  const items = results.data?.items ?? [];
-  const total = results.data?.total ?? 0;
-  const selectedIds = [...selected];
-  const pageStart = total === 0 ? 0 : page * PAGE_SIZE + 1;
-  const pageEnd = Math.min((page + 1) * PAGE_SIZE, total);
-  const allPageSelected = items.length > 0 && items.every((item) => selected.has(item.id));
-  const showSelectAllResults = allPageSelected && selected.size < total;
+  const folders = useQuery({
+    queryKey: queryKeys.folders,
+    queryFn: () => getFolders().then((response) => response.data),
+    refetchInterval: 5000,
+  });
+
+  const counts = useQuery({
+    queryKey: queryKeys.resultsCount,
+    queryFn: () => getResultsCount().then((response) => response.data),
+  });
+
+  const folderResults = useQuery({
+    queryKey: queryKeys.reviewFolder(filter, selectedFolder),
+    enabled: Boolean(selectedFolder),
+    queryFn: () =>
+      getResults({
+        decision: filter !== "all" ? filter : undefined,
+        folder: selectedFolder ?? undefined,
+        status: "active",
+        limit: REVIEW_LIMIT,
+        offset: 0,
+      }).then((response) => response.data),
+  });
+
+  const flaggedFolders = useMemo(
+    () =>
+      (folders.data ?? [])
+        .filter((entry) => entry.flagged > 0)
+        .sort((left, right) => left.folder.localeCompare(right.folder)),
+    [folders.data],
+  );
+
+  const tree = useMemo(() => buildTree(flaggedFolders, completedFolders), [completedFolders, flaggedFolders]);
+  const currentFolderKey = selectedFolder ?? "";
+  const rescuedIds = useMemo(() => new Set(rescuedByFolder[currentFolderKey] ?? []), [currentFolderKey, rescuedByFolder]);
+  const items = folderResults.data?.items ?? [];
+  const remainingItems = items.filter((item) => !rescuedIds.has(item.id));
+  const inspectedItem = items.find((item) => item.id === focusedId) ?? items[0] ?? null;
 
   useEffect(() => {
-    setPage(0);
-    setSelected(new Set());
-  }, [filter]);
-
-  const subtitle = useMemo(() => {
-    if (selected.size === 0) {
-      return `${total} flagged images`;
-    }
-    return `${selected.size} selected`;
-  }, [selected.size, total]);
-
-  const toggle = (id: number) => {
-    setSelected((current) => {
-      const next = new Set(current);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
-  };
-
-  const clearSelection = () => setSelected(new Set());
-
-  const quarantineSelected = (ids: number[]) => {
-    quarantine.mutate(ids, { onSuccess: clearSelection });
-  };
-
-  const deleteSelected = (ids: number[]) => setPendingDeleteIds(ids);
-
-  const confirmDelete = () => {
-    if (pendingDeleteIds.length === 0) {
+    if (!flaggedFolders.length) {
+      setSelectedFolder(null);
       return;
     }
-    remove.mutate(pendingDeleteIds, {
+    if (!selectedFolder || !flaggedFolders.some((entry) => entry.folder === selectedFolder)) {
+      setSelectedFolder(flaggedFolders[0].folder);
+    }
+  }, [flaggedFolders, selectedFolder]);
+
+  useEffect(() => {
+    if (!items.length) {
+      setFocusedId(null);
+      return;
+    }
+    if (!focusedId || !items.some((item) => item.id === focusedId)) {
+      setFocusedId(items[0].id);
+    }
+  }, [focusedId, items]);
+
+  useEffect(() => {
+    if (!selectedFolder || !items.length || remainingItems.length !== 0) {
+      return;
+    }
+    setCompletedFolders((current) => new Set(current).add(selectedFolder));
+    const timer = window.setTimeout(() => {
+      goToNextFolder();
+    }, 220);
+    return () => window.clearTimeout(timer);
+  }, [items.length, remainingItems.length, selectedFolder]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Alt") {
+        setPeekMode(true);
+      }
+    };
+    const handleKeyUp = (event: KeyboardEvent) => {
+      if (event.key === "Alt") {
+        setPeekMode(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+    };
+  }, []);
+
+  const invalidateReview = (invalidateCurrentFolder = true) => {
+    queryClient.invalidateQueries({ queryKey: queryKeys.resultsCount });
+    queryClient.invalidateQueries({ queryKey: queryKeys.folders });
+    queryClient.invalidateQueries({ queryKey: queryKeys.stats });
+    if (invalidateCurrentFolder && selectedFolder) {
+      queryClient.invalidateQueries({ queryKey: queryKeys.reviewFolder(filter, selectedFolder) });
+    }
+  };
+
+  const rescueMutation = useMutation({
+    mutationFn: async ({ fileId, rescued }: { fileId: number; rescued: boolean }) => {
+      if (rescued) {
+        await rescueFiles([fileId]);
+      } else {
+        await unrescueFiles([fileId]);
+      }
+    },
+    onSuccess: () => invalidateReview(false),
+    onError: () => toast({ title: "Failed to update rescued state", variant: "error" }),
+  });
+
+  const quarantineMutation = useMutation({
+    mutationFn: async (fileIds: number[]) => quarantineFiles(fileIds),
+    onSuccess: async (_response, fileIds) => {
+      if (selectedFolder) {
+        setCompletedFolders((current) => new Set(current).add(selectedFolder));
+        setRescuedByFolder((current) => ({ ...current, [selectedFolder]: [] }));
+      }
+      setLastAction({ type: "quarantine", fileIds });
+      invalidateReview();
+      toast({
+        title: `${fileIds.length} file${fileIds.length === 1 ? "" : "s"} quarantined`,
+        actionLabel: "Undo",
+        onAction: () => {
+          restoreMutation.mutate(fileIds);
+        },
+      });
+    },
+    onError: () => toast({ title: "Failed to quarantine files", variant: "error" }),
+  });
+
+  const restoreMutation = useMutation({
+    mutationFn: async (fileIds: number[]) => restoreFiles(fileIds),
+    onSuccess: () => {
+      setLastAction(null);
+      invalidateReview();
+      toast({ title: "Last quarantine action restored" });
+    },
+    onError: () => toast({ title: "Failed to restore files", variant: "error" }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (fileIds: number[]) => deleteFiles(fileIds),
+    onSuccess: (_response, fileIds) => {
+      if (selectedFolder) {
+        setCompletedFolders((current) => new Set(current).add(selectedFolder));
+        setRescuedByFolder((current) => ({ ...current, [selectedFolder]: [] }));
+      }
+      invalidateReview();
+      toast({ title: `${fileIds.length} file${fileIds.length === 1 ? "" : "s"} deleted` });
+    },
+    onError: () => toast({ title: "Failed to delete files", variant: "error" }),
+  });
+
+  const moveFocus = (delta: number) => {
+    if (!items.length) {
+      return;
+    }
+    const currentIndex = Math.max(0, items.findIndex((item) => item.id === focusedId));
+    const nextIndex = Math.min(items.length - 1, Math.max(0, currentIndex + delta));
+    setFocusedId(items[nextIndex].id);
+  };
+
+  const toggleRescue = (item: ScanResult) => {
+    const currentlyRescued = rescuedIds.has(item.id);
+    setRescuedByFolder((current) => ({
+      ...current,
+      [currentFolderKey]: toggleId(current[currentFolderKey] ?? [], item.id),
+    }));
+    rescueMutation.mutate({ fileId: item.id, rescued: !currentlyRescued });
+    setLastAction({ type: currentlyRescued ? "unrescue" : "rescue", fileId: item.id });
+  };
+
+  const goToNextFolder = () => {
+    if (!selectedFolder) {
+      return;
+    }
+    const currentIndex = flaggedFolders.findIndex((entry) => entry.folder === selectedFolder);
+    const nextFolder = flaggedFolders[currentIndex + 1]?.folder ?? flaggedFolders[currentIndex - 1]?.folder ?? null;
+    setSelectedFolder(nextFolder);
+  };
+
+  const quarantineRemaining = () => {
+    const ids = remainingItems.map((item) => item.id);
+    if (!ids.length) {
+      return;
+    }
+    quarantineMutation.mutate(ids, { onSuccess: goToNextFolder });
+  };
+
+  const deleteRemaining = () => {
+    const ids = remainingItems.map((item) => item.id);
+    if (!ids.length) {
+      return;
+    }
+    setPendingDeleteIds(ids);
+  };
+
+  const confirmDelete = () => {
+    if (!pendingDeleteIds.length) {
+      return;
+    }
+    deleteMutation.mutate(pendingDeleteIds, {
       onSuccess: () => {
-        clearSelection();
         setPendingDeleteIds([]);
+        goToNextFolder();
       },
     });
   };
 
-  const selectAllResults = async () => {
-    const response = await getResults({
-      decision: filter !== "all" ? filter : undefined,
-      status: "active",
-      limit: total,
-      offset: 0,
-    });
-    setSelected(new Set((response.data.items ?? []).map((item) => item.id)));
-  };
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (!items.length) {
+        return;
+      }
+      if (event.ctrlKey && event.key === "Enter") {
+        event.preventDefault();
+        quarantineRemaining();
+        return;
+      }
+      if (event.ctrlKey && event.key.toLowerCase() === "z") {
+        event.preventDefault();
+        if (!lastAction) {
+          return;
+        }
+        if (lastAction.type === "rescue") {
+          setRescuedByFolder((current) => ({
+            ...current,
+            [currentFolderKey]: (current[currentFolderKey] ?? []).filter((entry) => entry !== lastAction.fileId),
+          }));
+          rescueMutation.mutate({ fileId: lastAction.fileId, rescued: false });
+        } else if (lastAction.type === "unrescue") {
+          setRescuedByFolder((current) => ({
+            ...current,
+            [currentFolderKey]: [...(current[currentFolderKey] ?? []), lastAction.fileId],
+          }));
+          rescueMutation.mutate({ fileId: lastAction.fileId, rescued: true });
+        } else if (lastAction.type === "quarantine") {
+          restoreMutation.mutate(lastAction.fileIds);
+        }
+        setLastAction(null);
+        return;
+      }
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        moveFocus(-1);
+        return;
+      }
+      if (event.key === "ArrowRight") {
+        event.preventDefault();
+        moveFocus(1);
+        return;
+      }
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        moveFocus(-getGridColumns());
+        return;
+      }
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        moveFocus(getGridColumns());
+        return;
+      }
+      if (event.key === " ") {
+        event.preventDefault();
+        const activeItem = items.find((item) => item.id === focusedId);
+        if (!activeItem) {
+          return;
+        }
+        toggleRescue(activeItem);
+        if (event.shiftKey) {
+          moveFocus(1);
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [currentFolderKey, focusedId, items, lastAction, rescueMutation, restoreMutation]);
+
+  const subtitle = `${flaggedFolders.length} folders with flagged files`;
 
   return (
     <div className="space-y-6">
@@ -102,114 +405,79 @@ export function Review() {
         subtitle={subtitle}
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <button
-              onClick={() => {
-                if (allPageSelected) {
-                  clearSelection();
-                } else {
-                  setSelected(new Set(items.map((item) => item.id)));
-                }
-              }}
-              className="rounded-xl px-3 py-2 text-sm"
-              style={{ background: "var(--bg-1)", border: "1px solid var(--line)" }}
-            >
-              {allPageSelected ? "Deselect page" : `Select page (${items.length})`}
-            </button>
-            {showSelectAllResults ? (
+            {FILTERS.map((entry) => (
               <button
-                onClick={selectAllResults}
-                className="rounded-xl px-3 py-2 text-sm"
-                style={{ background: "var(--bg-2)", border: "1px solid var(--line)" }}
+                key={entry}
+                type="button"
+                onClick={() => {
+                  setFilter(entry);
+                  setSearchParams(entry === "all" ? {} : { decision: entry });
+                }}
+                className="rounded-2xl px-3 py-2 text-sm font-medium capitalize"
+                style={{
+                  background: filter === entry ? "var(--bg-2)" : "var(--bg-1)",
+                  border: `1px solid ${filter === entry ? "var(--line)" : "var(--line-soft)"}`,
+                }}
               >
-                Select all {total}
+                {entry} {entry === "all" ? (counts.data?.explicit ?? 0) + (counts.data?.borderline ?? 0) : counts.data?.[entry] ?? 0}
               </button>
-            ) : null}
-            {selected.size > 0 ? (
-              <>
-                <button
-                  onClick={() => quarantineSelected(selectedIds)}
-                  className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium"
-                  style={{ background: "var(--violet-dim)", color: "var(--violet)" }}
-                >
-                  <Archive size={14} /> Quarantine
-                </button>
-                <button
-                  onClick={() => deleteSelected(selectedIds)}
-                  className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium"
-                  style={{ background: "var(--red-dim)", color: "var(--red)" }}
-                >
-                  <Trash2 size={14} /> Delete
-                </button>
-              </>
-            ) : null}
+            ))}
           </div>
         }
       />
 
-      <ReviewToolbar
-        filter={filter}
-        onFilterChange={(next) => {
-          setFilter(next);
-          setSearchParams(next === "all" ? {} : { decision: next });
-        }}
-        counts={counts.data ?? {}}
-        view={view}
-        onViewChange={setView}
-      />
-
-      {results.isLoading ? (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-          {Array.from({ length: 10 }).map((_, index) => (
-            <SkeletonCard key={index} />
-          ))}
-        </div>
-      ) : items.length === 0 ? (
-        <EmptyState title="No flagged images found" description="Run a scan to populate this review queue." />
-      ) : view === "grid" ? (
-        <ImageGrid
-          items={items}
-          selected={selected}
-          onToggle={toggle}
-          onQuarantine={quarantineSelected}
-          onDelete={deleteSelected}
-        />
+      {!flaggedFolders.length && !folders.isLoading ? (
+        <EmptyState title="No flagged files to triage" description="Run a scan and flagged folders will appear here." />
       ) : (
-        <ListView
-          items={items}
-          selected={selected}
-          onToggle={toggle}
-          onQuarantine={quarantineSelected}
-          onDelete={deleteSelected}
-        />
-      )}
+        <div className="grid gap-5 xl:grid-cols-[250px_minmax(0,1fr)_300px]">
+          <ContextTree nodes={tree} selectedPath={selectedFolder} onSelect={setSelectedFolder} />
 
-      <div className="flex items-center justify-between rounded-2xl border px-4 py-3 text-sm" style={{ borderColor: "var(--line)", background: "var(--bg-1)" }}>
-        <span style={{ color: "var(--ink-2)" }}>
-          {pageStart}-{pageEnd} of {total}
-        </span>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setPage((current) => Math.max(0, current - 1))}
-            disabled={page === 0}
-            className="rounded-xl px-3 py-2 disabled:opacity-40"
-            style={{ background: "var(--bg-2)" }}
-          >
-            Previous
-          </button>
-          <button
-            onClick={() => setPage((current) => (pageEnd < total ? current + 1 : current))}
-            disabled={pageEnd >= total}
-            className="rounded-xl px-3 py-2 disabled:opacity-40"
-            style={{ background: "var(--bg-2)" }}
-          >
-            Next
-          </button>
+          <section className="space-y-4">
+            <MassActionBar
+              remaining={remainingItems.length}
+              folderLabel={selectedFolder ?? "Waiting for folder"}
+              onQuarantine={quarantineRemaining}
+              onDelete={deleteRemaining}
+            />
+
+            {folderResults.isLoading ? (
+              <div
+                className="rounded-3xl border px-6 py-10 text-sm"
+                style={{ borderColor: "var(--line)", background: "var(--bg-1)", color: "var(--ink-2)" }}
+              >
+                Loading flagged items for this folder...
+              </div>
+            ) : !items.length ? (
+              <div
+                className="rounded-3xl border px-6 py-10 text-sm"
+                style={{ borderColor: "var(--line)", background: "var(--bg-1)", color: "var(--ink-2)" }}
+              >
+                This folder has no active flagged items left.
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 2xl:grid-cols-4">
+                {items.map((item) => (
+                  <TriageCard
+                    key={item.id}
+                    item={item}
+                    rescued={rescuedIds.has(item.id)}
+                    focused={item.id === focusedId}
+                    peek={peekMode && item.id === focusedId}
+                    onFocus={() => setFocusedId(item.id)}
+                    onToggleRescue={() => toggleRescue(item)}
+                  />
+                ))}
+              </div>
+            )}
+          </section>
+
+          <InspectorPanel item={inspectedItem} />
         </div>
-      </div>
+      )}
 
       <ConfirmDialog
         open={pendingDeleteIds.length > 0}
-        title={pendingDeleteIds.length > 1 ? "Delete selected files?" : "Delete file?"}
+        title={pendingDeleteIds.length > 1 ? "Delete remaining files?" : "Delete remaining file?"}
         description={
           pendingDeleteIds.length > 1
             ? `This permanently deletes ${pendingDeleteIds.length} files from disk.`
