@@ -1,15 +1,60 @@
-﻿# NSFW Scanner MVP
+# 🛡️ NSFW Scanner
 
-Local AI-powered image scanner to detect explicit content. Now with Docker & GUI!
+A powerful, local AI-powered image scanner to detect explicit content using `ONNX` and `OpenCV`. This tool helps you automatically identify and manage NSFW images in your local folders.
 
-## 🚀 Quickstart (Docker)
-1. Place your model in ./models/nudenet.onnx.
-2. Run docker-compose up -d --build.
-3. Access the Review GUI at http://localhost:8501.
-4. Run a scan inside the container:
-   docker-compose exec scanner python app/main.py scan /target_images
+## ✨ Features
+- **Fast GPU/CPU Inference**: Uses `onnxruntime` for high-performance detection.
+- **Incremental Scanning**: Only scans new or modified files.
+- **Review Dashboard**: Beautiful Streamlit-based GUI to review flagged content.
+- **Automation Tools**: Commands to move explicit files to quarantine or delete them.
 
-## 💻 Local Run
-1. pip install -r requirements.txt
-2. python app/main.py scan /path/to/images
-3. streamlit run app/gui.py to view results.
+## 🚀 Getting Started
+
+### 1. Prerequisites
+- Python 3.9+
+- An NVIDIA GPU (optional, for CUDA acceleration)
+
+### 2. Setup
+1. **Clone the repository**:
+   ```bash
+   git clone <repo-url>
+   cd nsfw-detector
+   ```
+
+2. **Install dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. **Add the Model**:
+   Place your NudeNet ONNX model (e.g., `nudenet.onnx`) in the `models/` directory.
+   - Expected path: `models/nudenet.onnx`
+
+### 3. Usage
+
+#### 🔍 Scan a Folder
+Run the scanner on any directory containing images:
+```bash
+python app/main.py scan "C:/Users/YourName/Pictures"
+```
+
+#### 🖥️ Review Flagged Images
+Start the dashboard to review "explicit" and "borderline" detections:
+```bash
+streamlit run app/gui.py
+```
+
+#### 📦 Management Commands
+- **Quarantine**: Move all `explicit` detected images to the `./quarantine/` folder:
+  ```bash
+  python app/main.py quarantine
+  ```
+- **Delete**: Permanently delete all `explicit` detected images:
+  ```bash
+  python app/main.py delete
+  ```
+
+## 🛠️ Configuration
+You can adjust thresholds and supported extensions in `app/config.py`.
+- `EXPLICIT_THRESHOLD`: Default `0.6`
+- `BORDERLINE_THRESHOLD`: Default `0.4`

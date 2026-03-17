@@ -27,8 +27,6 @@ if df.empty:
     st.success("No explicit or borderline images found! 🎉")
 else:
     st.write(f"Found **{len(df)}** flagged images requiring review.")
-    
-    st.cache_data.clear()
     # Create a grid layout
     cols = st.columns(3)
     for index, row in df.iterrows():

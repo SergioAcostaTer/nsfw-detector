@@ -16,33 +16,40 @@ def scan_folder(folder: Path):
 
     files = [p for p in folder.rglob("*") if p.suffix.lower() in IMAGE_EXTENSIONS]
     print(f"Found {len(files)} images. Starting scan...")
-    
+
     for path in tqdm(files):
-        stat = path.stat()
-        
-        # Incremental scan: skip if mtime hasn't changed
-        existing = conn.execute(
-            "SELECT mtime FROM files WHERE path = ?", (str(path),)
-        ).fetchone()
+        try:
+            stat = path.stat()
 
-        if existing and existing[0] == stat.st_mtime:
-            continue
+            existing = conn.execute(
+                "SELECT mtime FROM files WHERE path = ?", (str(path),)
+            ).fetchone()
 
-        image = cv2.imread(str(path))
-        if image is None:
-            continue
+            if existing and existing[0] == stat.st_mtime:
+                continue
 
-        detections = detector.detect(image)
-        decision, score = decide(detections)
+            image = cv2.imread(str(path))
+            if image is None:
+                continue
 
-        conn.execute(
-            "INSERT OR REPLACE INTO files (path, size, mtime) VALUES (?, ?, ?)",
-            (str(path), stat.st_size, stat.st_mtime)
-        )
-        file_id = conn.execute("SELECT id FROM files WHERE path = ?", (str(path),)).fetchone()[0]
-        
-        conn.execute(
-            "INSERT INTO results (file_id, score, decision, classes, created_at) VALUES (?, ?, ?, ?, ?)",
-            (file_id, score, decision, str(detections), int(time.time()))
-        )
-        conn.commit()
+            detections = detector.detect(image)
+            decision, score = decide(detections)
+
+            conn.execute(
+                "INSERT OR REPLACE INTO files (path, size, mtime) VALUES (?, ?, ?)",
+                (str(path), stat.st_size, stat.st_mtime)
+            )
+
+            file_id = conn.execute(
+                "SELECT id FROM files WHERE path = ?", (str(path),)
+            ).fetchone()[0]
+
+            conn.execute(
+                "INSERT INTO results (file_id, score, decision, classes, created_at) VALUES (?, ?, ?, ?, ?)",
+                (file_id, score, decision, str(detections), int(time.time()))
+            )
+
+        except Exception as e:
+            print(f"Error processing {path}: {e}")
+
+    conn.commit()
