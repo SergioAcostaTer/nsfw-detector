@@ -11,6 +11,8 @@ DEFAULT_SETTINGS = {
     "custom_skip_folders": [],
     "auto_delete_days": 30,
     "theme": "dark",
+    "batch_size": 8,
+    "video_fps": 1.0,
 }
 
 

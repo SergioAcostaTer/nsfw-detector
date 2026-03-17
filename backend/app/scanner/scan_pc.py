@@ -3,7 +3,7 @@ from collections import deque
 from pathlib import Path
 from threading import Event
 
-from app.config import IMAGE_EXTENSIONS
+from app.config import IMAGE_EXTENSIONS, VIDEO_EXTENSIONS
 
 
 def get_scan_roots() -> list[Path]:
@@ -82,7 +82,7 @@ def iter_pc_images(
             if current.is_symlink():
                 continue
             if current.is_file():
-                if current.suffix.lower() in IMAGE_EXTENSIONS:
+                if current.suffix.lower() in IMAGE_EXTENSIONS + VIDEO_EXTENSIONS:
                     files.append(current)
                 continue
 

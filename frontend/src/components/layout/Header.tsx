@@ -103,7 +103,7 @@ export function Header() {
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">{item.path.split(/[\\/]/).pop()}</p>
                     <p className="truncate text-xs" style={{ color: "var(--ink-2)" }}>
-                      {item.folder}
+                      {item.folder}{item.type === "video" ? ` · video${item.frame_count ? ` · ${item.frame_count}f` : ""}` : ""}
                     </p>
                   </div>
                   <span

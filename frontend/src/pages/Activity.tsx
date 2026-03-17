@@ -15,7 +15,8 @@ const STATUS_STYLES: Record<string, { bg: string; color: string }> = {
 };
 
 function formatTimeAgo(timestamp: number) {
-  const diff = Math.max(0, Math.floor(Date.now() / 1000) - timestamp);
+  const tsSeconds = timestamp > 10_000_000_000 ? Math.floor(timestamp / 1000) : timestamp;
+  const diff = Math.max(0, Math.floor(Date.now() / 1000) - tsSeconds);
   if (diff < 60) {
     return `${diff}s ago`;
   }

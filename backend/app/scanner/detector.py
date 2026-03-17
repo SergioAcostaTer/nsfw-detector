@@ -1,9 +1,12 @@
+from concurrent.futures import ThreadPoolExecutor
+
 import cv2
 import numpy as np
 import onnxruntime as ort
 
 from app.config import MODEL_PATH
 from app.settings import get_onnx_providers
+from app.scanner.decision import CLASS_WEIGHTS, SAFE_CLASSES
 
 CLASS_MAP = {
     0: "FEMALE_GENITALIA_COVERED",
@@ -25,58 +28,38 @@ CLASS_MAP = {
     16: "FEMALE_BREAST_COVERED",
     17: "BUTTOCKS_COVERED",
 }
-_detector = None
 SCORE_THRESHOLD = 0.4
 NMS_THRESHOLD = 0.45
+MIN_AREA_RATIO = 0.02
+_detector = None
 
 
 class Detector:
     def __init__(self):
-        self.session = ort.InferenceSession(
-            str(MODEL_PATH), providers=get_onnx_providers()
-        )
+        self.session = ort.InferenceSession(str(MODEL_PATH), providers=get_onnx_providers())
         self.input_name = self.session.get_inputs()[0].name
+        self.preprocess_pool = ThreadPoolExecutor(max_workers=4)
 
     def preprocess(self, image):
         img = cv2.resize(image, (320, 320))
         img = img.astype(np.float32) / 255.0
         img = np.transpose(img, (2, 0, 1))
-        return np.expand_dims(img, axis=0)
+        return img
 
-    def detect(self, image):
-        input_tensor = self.preprocess(image)
-        outputs = self.session.run(None, {self.input_name: input_tensor})
-        preds = outputs[0]
-        raw = preds[0]
-
-        if raw.ndim != 2:
-            return []
-
-        # YOLO-style ONNX export returns [channels, detections]. Transpose to
-        # [detections, channels] before reading class logits.
-        if raw.shape[0] == 4 + len(CLASS_MAP):
-            rows = raw.T
-            class_offset = 4
-        else:
-            rows = raw
-            class_offset = 5
-
+    def _decode_rows(self, rows, *, image_area: float):
         candidates = []
         for pred in rows:
-            class_scores = pred[class_offset:]
+            class_scores = pred[4:]
             if len(class_scores) == 0:
                 continue
-
             class_id = int(np.argmax(class_scores))
             score = float(class_scores[class_id])
-            if score < SCORE_THRESHOLD:
-                continue
-
-            if class_id not in CLASS_MAP:
-                print(f"Unknown class_id: {class_id}")
+            if score < SCORE_THRESHOLD or class_id not in CLASS_MAP:
                 continue
 
             center_x, center_y, width, height = [float(value) for value in pred[:4]]
+            if image_area > 0 and (width * height) / image_area < MIN_AREA_RATIO and CLASS_MAP[class_id] in SAFE_CLASSES:
+                continue
             x = center_x - (width / 2.0)
             y = center_y - (height / 2.0)
             candidates.append(
@@ -84,6 +67,7 @@ class Detector:
                     "class_id": class_id,
                     "class": CLASS_MAP[class_id],
                     "score": score,
+                    "weighted_score": score * CLASS_WEIGHTS.get(CLASS_MAP[class_id], 0.2),
                     "box": [x, y, width, height],
                 }
             )
@@ -96,18 +80,33 @@ class Detector:
             indices = cv2.dnn.NMSBoxes(boxes, scores, SCORE_THRESHOLD, NMS_THRESHOLD)
             if len(indices) == 0:
                 continue
-
             for index in np.array(indices).flatten():
                 item = class_candidates[int(index)]
                 detections.append(
                     {
                         "class": item["class"],
                         "score": item["score"],
+                        "weighted_score": item["weighted_score"],
                         "box": item["box"],
                     }
                 )
-
         return sorted(detections, key=lambda item: item["score"], reverse=True)
+
+    def detect_batch(self, images):
+        if not images:
+            return []
+        processed = list(self.preprocess_pool.map(self.preprocess, images))
+        batch = np.stack(processed)
+        outputs = self.session.run(None, {self.input_name: batch})[0]
+        results = []
+        for raw, image in zip(outputs, images):
+            rows = raw.T if raw.ndim == 2 and raw.shape[0] == 4 + len(CLASS_MAP) else raw
+            image_area = float(image.shape[0] * image.shape[1]) if getattr(image, "shape", None) is not None else 0.0
+            results.append(self._decode_rows(rows, image_area=image_area))
+        return results
+
+    def detect(self, image):
+        return self.detect_batch([image])[0]
 
 
 def get_detector() -> Detector:

@@ -56,6 +56,14 @@ export function ImageCard({
         >
           {item.decision} {(item.score * 100).toFixed(0)}%
         </div>
+        {item.type === "video" ? (
+          <div
+            className="absolute bottom-3 left-3 rounded-full px-2 py-1 text-[11px] uppercase"
+            style={{ background: "rgba(15, 23, 42, 0.7)", color: "#fff" }}
+          >
+            Video {item.frame_count ? `· ${item.frame_count}f` : ""}
+          </div>
+        ) : null}
       </button>
 
       <div

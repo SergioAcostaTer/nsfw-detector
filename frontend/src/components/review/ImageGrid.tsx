@@ -77,13 +77,23 @@ export function ImageGrid({
           >
             <div className="relative flex min-h-[60vh] items-center justify-center rounded-2xl" style={{ background: "var(--bg-0)" }}>
               {!imgLoaded ? <Loader2 className="animate-spin" style={{ color: "var(--ink-2)" }} /> : null}
-              <img
-                src={imageUrl(activeItem.path)}
-                alt=""
-                onLoad={() => setImgLoaded(true)}
-                className="max-h-[80vh] w-full object-contain"
-                style={{ display: imgLoaded ? "block" : "none" }}
-              />
+              {activeItem.type === "video" ? (
+                <video
+                  src={imageUrl(activeItem.path)}
+                  controls
+                  onLoadedData={() => setImgLoaded(true)}
+                  className="max-h-[80vh] w-full object-contain"
+                  style={{ display: imgLoaded ? "block" : "none" }}
+                />
+              ) : (
+                <img
+                  src={imageUrl(activeItem.path)}
+                  alt=""
+                  onLoad={() => setImgLoaded(true)}
+                  className="max-h-[80vh] w-full object-contain"
+                  style={{ display: imgLoaded ? "block" : "none" }}
+                />
+              )}
               <button
                   onClick={() => {
                     setImgLoaded(false);
@@ -108,7 +118,7 @@ export function ImageGrid({
 
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold">Image details</h2>
+                <h2 className="text-lg font-semibold">{activeItem.type === "video" ? "Video details" : "Image details"}</h2>
                 <button onClick={() => setLightboxIndex(null)} className="rounded-xl p-2" style={{ background: "var(--bg-2)" }}>
                   <X size={16} />
                 </button>
@@ -121,6 +131,14 @@ export function ImageGrid({
                   Decision: <span style={{ color: activeItem.decision === "explicit" ? "var(--red)" : "var(--amber)" }}>{activeItem.decision}</span>
                 </p>
                 <p>Score: {(activeItem.score * 100).toFixed(1)}%</p>
+                {activeItem.type === "video" ? (
+                  <>
+                    <p>Frames analyzed: {activeItem.frame_count ?? 0}</p>
+                    <p>Duration: {(activeItem.duration ?? 0).toFixed(1)}s</p>
+                    <p>Avg score: {((activeItem.avg_score ?? activeItem.score) * 100).toFixed(1)}%</p>
+                    <p>Max score: {((activeItem.max_score ?? activeItem.score) * 100).toFixed(1)}%</p>
+                  </>
+                ) : null}
                 <p>Classes: {activeItem.classes}</p>
               </div>
             </div>

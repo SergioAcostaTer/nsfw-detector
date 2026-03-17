@@ -44,17 +44,27 @@ export function ListView({
                 {item.folder}
               </td>
               <td className="px-4 py-3">
-                <span
-                  className="rounded-full px-2 py-1 text-xs uppercase"
-                  style={{
-                    background: item.decision === "explicit" ? "var(--red-dim)" : "var(--amber-dim)",
-                    color: item.decision === "explicit" ? "var(--red)" : "var(--amber)",
-                  }}
-                >
-                  {item.decision}
-                </span>
+                <div className="flex flex-wrap gap-2">
+                  <span
+                    className="rounded-full px-2 py-1 text-xs uppercase"
+                    style={{
+                      background: item.decision === "explicit" ? "var(--red-dim)" : "var(--amber-dim)",
+                      color: item.decision === "explicit" ? "var(--red)" : "var(--amber)",
+                    }}
+                  >
+                    {item.decision}
+                  </span>
+                  {item.type === "video" ? (
+                    <span className="rounded-full px-2 py-1 text-xs uppercase" style={{ background: "var(--bg-2)" }}>
+                      Video
+                    </span>
+                  ) : null}
+                </div>
               </td>
-              <td className="px-4 py-3">{(item.score * 100).toFixed(1)}%</td>
+              <td className="px-4 py-3">
+                {(item.score * 100).toFixed(1)}%
+                {item.type === "video" ? ` / avg ${((item.avg_score ?? item.score) * 100).toFixed(1)}%` : ""}
+              </td>
               <td className="max-w-sm truncate px-4 py-3" title={item.classes}>
                 {item.classes}
               </td>

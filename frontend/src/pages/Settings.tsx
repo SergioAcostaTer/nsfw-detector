@@ -14,6 +14,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   custom_skip_folders: [],
   auto_delete_days: 30,
   theme: "dark",
+  batch_size: 8,
+  video_fps: 1.0,
 };
 
 function Section({ title, description, children }: { title: string; description: string; children: ReactNode }) {
@@ -102,13 +104,27 @@ export function Settings() {
       </p>
 
       <Section title="Inference" description="Choose the execution provider and hardware preference.">
-        <button
-          onClick={() => updateField("gpu_enabled", !localSettings.gpu_enabled)}
-          className="rounded-2xl px-4 py-2 text-sm"
-          style={{ background: localSettings.gpu_enabled ? "var(--blue)" : "var(--bg-2)", color: localSettings.gpu_enabled ? "#fff" : "var(--ink-1)" }}
-        >
-          GPU {localSettings.gpu_enabled ? "Enabled" : "Disabled"}
-        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={() => updateField("gpu_enabled", !localSettings.gpu_enabled)}
+            className="rounded-2xl px-4 py-2 text-sm"
+            style={{ background: localSettings.gpu_enabled ? "var(--blue)" : "var(--bg-2)", color: localSettings.gpu_enabled ? "#fff" : "var(--ink-1)" }}
+          >
+            GPU {localSettings.gpu_enabled ? "Enabled" : "Disabled"}
+          </button>
+          <label className="text-sm">
+            Batch size
+            <input
+              type="number"
+              min={1}
+              max={32}
+              value={localSettings.batch_size}
+              onChange={(event) => updateField("batch_size", Math.max(1, Number(event.target.value) || 1))}
+              className="ml-2 w-20 rounded-xl border px-3 py-2"
+              style={{ background: "var(--bg-2)", borderColor: "var(--line)" }}
+            />
+          </label>
+        </div>
       </Section>
 
       <Section title="Detection Thresholds" description="Tune how aggressive explicit and borderline decisions should be.">
@@ -185,6 +201,22 @@ export function Settings() {
           style={{ background: "var(--bg-2)", borderColor: "var(--line)" }}
           placeholder={"C:\\Users\\Sergio\\Pictures\\Safe\nD:\\Backups"}
         />
+      </Section>
+
+      <Section title="Video Processing" description="Control frame sampling for supported video scans.">
+        <label className="text-sm">
+          Frames per second
+          <input
+            type="number"
+            min={0.1}
+            max={10}
+            step={0.1}
+            value={localSettings.video_fps}
+            onChange={(event) => updateField("video_fps", Math.max(0.1, Number(event.target.value) || 1))}
+            className="ml-2 w-24 rounded-xl border px-3 py-2"
+            style={{ background: "var(--bg-2)", borderColor: "var(--line)" }}
+          />
+        </label>
       </Section>
 
       <Section title="Appearance" description="Choose a local theme. System follows your OS preference.">

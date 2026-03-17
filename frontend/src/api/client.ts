@@ -12,10 +12,15 @@ export interface ScanResult {
   folder: string;
   status: FileStatus;
   quarantined_at: number | null;
+  type?: "image" | "video";
+  frame_count?: number;
+  duration?: number;
   decision: Decision;
   score: number;
   classes: string;
   created_at: number;
+  avg_score?: number;
+  max_score?: number;
 }
 
 export interface Stats {
@@ -31,6 +36,8 @@ export interface AppSettings {
   custom_skip_folders: string[];
   auto_delete_days: number;
   theme: ThemeMode;
+  batch_size: number;
+  video_fps: number;
 }
 
 export interface ScanStatus {
@@ -39,6 +46,8 @@ export interface ScanStatus {
   total: number;
   flagged: number;
   current_file: string;
+  job_id?: string | null;
+  status?: string;
 }
 
 export interface ScanSession {

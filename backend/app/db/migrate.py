@@ -8,6 +8,10 @@ def run_migrations(conn):
         "status": "TEXT DEFAULT 'active'",
         "quarantined_at": "INTEGER",
         "deleted_at": "INTEGER",
+        "type": "TEXT DEFAULT 'image'",
+        "frame_count": "INTEGER DEFAULT 0",
+        "duration": "REAL DEFAULT 0",
+        "fingerprint": "TEXT",
     }
     for col, definition in new_cols.items():
         if col in existing_cols:
@@ -34,6 +38,19 @@ def run_migrations(conn):
             )
             """
         )
+
+    results_cols = [row[1] for row in conn.execute("PRAGMA table_info(results)").fetchall()]
+    result_new_cols = {
+        "avg_score": "REAL DEFAULT 0",
+        "max_score": "REAL DEFAULT 0",
+    }
+    for col, definition in result_new_cols.items():
+        if col in results_cols:
+            continue
+        try:
+            conn.execute(f"ALTER TABLE results ADD COLUMN {col} {definition}")
+        except sqlite3.OperationalError as exc:
+            print(f"Migration error adding results.{col}: {exc}")
 
     conn.execute("CREATE INDEX IF NOT EXISTS idx_files_hash ON files(hash)")
     conn.commit()
