@@ -26,6 +26,8 @@ CLASS_MAP = {
     17: "BUTTOCKS_COVERED",
 }
 _detector = None
+SCORE_THRESHOLD = 0.4
+NMS_THRESHOLD = 0.45
 
 
 class Detector:
@@ -45,24 +47,67 @@ class Detector:
         input_tensor = self.preprocess(image)
         outputs = self.session.run(None, {self.input_name: input_tensor})
         preds = outputs[0]
+        raw = preds[0]
 
-        detections = []
-        for pred in preds[0]:
-            score = float(pred[4])
-            if score > 1.0:
-                score = score / 100.0
-            score = max(0.0, min(score, 1.0))
-            if score < 0.4:
+        if raw.ndim != 2:
+            return []
+
+        # YOLO-style ONNX export returns [channels, detections]. Transpose to
+        # [detections, channels] before reading class logits.
+        if raw.shape[0] == 4 + len(CLASS_MAP):
+            rows = raw.T
+            class_offset = 4
+        else:
+            rows = raw
+            class_offset = 5
+
+        candidates = []
+        for pred in rows:
+            class_scores = pred[class_offset:]
+            if len(class_scores) == 0:
                 continue
 
-            class_id = int(pred[5]) if len(pred) > 5 else -1
+            class_id = int(np.argmax(class_scores))
+            score = float(class_scores[class_id])
+            if score < SCORE_THRESHOLD:
+                continue
+
             if class_id not in CLASS_MAP:
                 print(f"Unknown class_id: {class_id}")
-            detections.append(
-                {"class": CLASS_MAP.get(class_id, "UNKNOWN"), "score": score}
+                continue
+
+            center_x, center_y, width, height = [float(value) for value in pred[:4]]
+            x = center_x - (width / 2.0)
+            y = center_y - (height / 2.0)
+            candidates.append(
+                {
+                    "class_id": class_id,
+                    "class": CLASS_MAP[class_id],
+                    "score": score,
+                    "box": [x, y, width, height],
+                }
             )
 
-        return detections
+        detections = []
+        for class_id in sorted({item["class_id"] for item in candidates}):
+            class_candidates = [item for item in candidates if item["class_id"] == class_id]
+            boxes = [item["box"] for item in class_candidates]
+            scores = [float(item["score"]) for item in class_candidates]
+            indices = cv2.dnn.NMSBoxes(boxes, scores, SCORE_THRESHOLD, NMS_THRESHOLD)
+            if len(indices) == 0:
+                continue
+
+            for index in np.array(indices).flatten():
+                item = class_candidates[int(index)]
+                detections.append(
+                    {
+                        "class": item["class"],
+                        "score": item["score"],
+                        "box": item["box"],
+                    }
+                )
+
+        return sorted(detections, key=lambda item: item["score"], reverse=True)
 
 
 def get_detector() -> Detector:
