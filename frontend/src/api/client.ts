@@ -7,6 +7,7 @@ export type {
   FolderSummary,
   ResultsResponse,
   ScanResult,
+  ScanMode,
   ScanSession,
   ScanStatus,
   Stats,

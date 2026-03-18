@@ -35,6 +35,7 @@ def init_db(conn):
         CREATE TABLE IF NOT EXISTS scan_sessions (
             id         INTEGER PRIMARY KEY,
             folder     TEXT,
+            scan_mode  TEXT DEFAULT 'images',
             started_at INTEGER,
             ended_at   INTEGER,
             total      INTEGER DEFAULT 0,

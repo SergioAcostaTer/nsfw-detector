@@ -203,12 +203,18 @@ def scan_folder_files(
     return {"total": tracker.total, "flagged": tracker.flagged, "status": status, "progress": 100 if status == "done" else 0}
 
 
-def scan_folder(folder: Path, session_id: int | None = None, progress_callback=None, cancel_event: Event | None = None):
+def scan_folder(
+    folder: Path,
+    session_id: int | None = None,
+    progress_callback=None,
+    cancel_event: Event | None = None,
+    scan_mode: str = "images",
+):
     settings = load_settings()
     batch_size = max(1, settings.get("batch_size", 8))
     tracker = ProgressTracker(total=0, callback=progress_callback)
     all_files: list[Path] = []
-    for chunk in chunk_discovered_media(folder, batch_size * 4):
+    for chunk in chunk_discovered_media(folder, batch_size * 4, scan_mode=scan_mode):
         all_files.extend(item["path"] for item in chunk)
         tracker.set_total(len(all_files))
     tracker.finish()

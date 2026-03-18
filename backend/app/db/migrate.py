@@ -30,6 +30,7 @@ def run_migrations(conn):
             CREATE TABLE IF NOT EXISTS scan_sessions (
                 id         INTEGER PRIMARY KEY,
                 folder     TEXT,
+                scan_mode  TEXT DEFAULT 'images',
                 started_at INTEGER,
                 ended_at   INTEGER,
                 total      INTEGER DEFAULT 0,
@@ -38,6 +39,13 @@ def run_migrations(conn):
             )
             """
         )
+    else:
+        scan_session_cols = [row[1] for row in conn.execute("PRAGMA table_info(scan_sessions)").fetchall()]
+        if "scan_mode" not in scan_session_cols:
+            try:
+                conn.execute("ALTER TABLE scan_sessions ADD COLUMN scan_mode TEXT DEFAULT 'images'")
+            except sqlite3.OperationalError as exc:
+                print(f"Migration error adding scan_sessions.scan_mode: {exc}")
 
     results_cols = [row[1] for row in conn.execute("PRAGMA table_info(results)").fetchall()]
     result_new_cols = {

@@ -1,6 +1,7 @@
 export type Decision = "explicit" | "borderline" | "safe";
 export type FileStatus = "active" | "quarantined" | "deleted";
 export type ThemeMode = "dark" | "light" | "system";
+export type ScanMode = "images" | "videos" | "both";
 
 export interface ScanResult {
   id: number;
@@ -55,6 +56,7 @@ export interface ScanStatus {
 export interface ScanSession {
   id: number;
   folder: string;
+  scan_mode?: ScanMode;
   started_at: number;
   ended_at: number | null;
   total: number;

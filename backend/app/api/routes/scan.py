@@ -3,7 +3,7 @@ from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
 
-from app.api.schemas import ScanRequest, ScanStatusResponse
+from app.api.schemas import PCScanRequest, ScanRequest, ScanStatusResponse
 from app.application.jobs.queue import job_queue
 from app.application.jobs.registry import ensure_jobs_registered
 from app.infrastructure.db.repositories.sessions_repository import SessionsRepository
@@ -36,22 +36,23 @@ def start_scan(req: ScanRequest):
     if latest and latest.status in {"pending", "running"}:
         raise HTTPException(status_code=409, detail="Scan already in progress")
     with get_db() as conn:
-        session_id = SessionsRepository(conn).create_session(str(target), job_queue.clock())
+        session_id = SessionsRepository(conn).create_session(str(target), job_queue.clock(), req.scan_mode)
         conn.commit()
-    job = job_queue.enqueue("scan_folder", {"folder": str(target), "session_id": session_id})
+    job = job_queue.enqueue("scan_folder", {"folder": str(target), "session_id": session_id, "scan_mode": req.scan_mode})
     return {"status": "started", "session_id": session_id, "job_id": job.id}
 
 
 @router.post("/scan/pc")
-def start_pc_scan():
+def start_pc_scan(req: PCScanRequest | None = None):
     ensure_jobs_registered()
     latest = job_queue.latest()
     if latest and latest.status in {"pending", "running"}:
         raise HTTPException(status_code=409, detail="Scan already in progress")
+    scan_mode = req.scan_mode if req else "images"
     with get_db() as conn:
-        session_id = SessionsRepository(conn).create_session("This PC", job_queue.clock())
+        session_id = SessionsRepository(conn).create_session("This PC", job_queue.clock(), scan_mode)
         conn.commit()
-    job = job_queue.enqueue("scan_pc", {"session_id": session_id})
+    job = job_queue.enqueue("scan_pc", {"session_id": session_id, "scan_mode": scan_mode})
     return {"status": "started", "session_id": session_id, "job_id": job.id}
 
 

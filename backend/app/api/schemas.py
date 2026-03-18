@@ -2,9 +2,16 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel
 
+ScanMode = Literal["images", "videos", "both"]
+
 
 class ScanRequest(BaseModel):
     folder: str
+    scan_mode: ScanMode = "images"
+
+
+class PCScanRequest(BaseModel):
+    scan_mode: ScanMode = "images"
 
 
 class ActionRequest(BaseModel):

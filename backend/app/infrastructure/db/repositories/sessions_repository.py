@@ -2,10 +2,10 @@ class SessionsRepository:
     def __init__(self, conn):
         self.conn = conn
 
-    def create_session(self, folder: str, started_at: int):
+    def create_session(self, folder: str, started_at: int, scan_mode: str = "images"):
         cursor = self.conn.execute(
-            "INSERT INTO scan_sessions (folder, started_at, status) VALUES (?, ?, 'running')",
-            (folder, started_at),
+            "INSERT INTO scan_sessions (folder, scan_mode, started_at, status) VALUES (?, ?, ?, 'running')",
+            (folder, scan_mode, started_at),
         )
         return cursor.lastrowid
 
@@ -25,7 +25,7 @@ class SessionsRepository:
     def get_recent(self, limit: int = 20):
         rows = self.conn.execute(
             """
-            SELECT id, folder, started_at, ended_at, total, flagged, status
+            SELECT id, folder, scan_mode, started_at, ended_at, total, flagged, status
             FROM scan_sessions
             ORDER BY started_at DESC
             LIMIT ?
@@ -36,11 +36,12 @@ class SessionsRepository:
             {
                 "id": row[0],
                 "folder": row[1],
-                "started_at": row[2],
-                "ended_at": row[3],
-                "total": row[4],
-                "flagged": row[5],
-                "status": row[6],
+                "scan_mode": row[2],
+                "started_at": row[3],
+                "ended_at": row[4],
+                "total": row[5],
+                "flagged": row[6],
+                "status": row[7],
             }
             for row in rows
         ]
@@ -48,7 +49,7 @@ class SessionsRepository:
     def get_running(self):
         rows = self.conn.execute(
             """
-            SELECT id, folder, started_at, ended_at, total, flagged, status
+            SELECT id, folder, scan_mode, started_at, ended_at, total, flagged, status
             FROM scan_sessions
             WHERE status = 'running'
             ORDER BY started_at ASC
@@ -58,18 +59,19 @@ class SessionsRepository:
             {
                 "id": row[0],
                 "folder": row[1],
-                "started_at": row[2],
-                "ended_at": row[3],
-                "total": row[4],
-                "flagged": row[5],
-                "status": row[6],
+                "scan_mode": row[2],
+                "started_at": row[3],
+                "ended_at": row[4],
+                "total": row[5],
+                "flagged": row[6],
+                "status": row[7],
             }
             for row in rows
         ]
 
     def get_by_id(self, session_id: int):
         row = self.conn.execute(
-            "SELECT id, folder, started_at, ended_at, total, flagged, status FROM scan_sessions WHERE id=?",
+            "SELECT id, folder, scan_mode, started_at, ended_at, total, flagged, status FROM scan_sessions WHERE id=?",
             (session_id,),
         ).fetchone()
         if row is None:
@@ -77,9 +79,10 @@ class SessionsRepository:
         return {
             "id": row[0],
             "folder": row[1],
-            "started_at": row[2],
-            "ended_at": row[3],
-            "total": row[4],
-            "flagged": row[5],
-            "status": row[6],
+            "scan_mode": row[2],
+            "started_at": row[3],
+            "ended_at": row[4],
+            "total": row[5],
+            "flagged": row[6],
+            "status": row[7],
         }

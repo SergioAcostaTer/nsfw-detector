@@ -4,8 +4,9 @@ import { useEffect, useRef } from "react";
 import { cancelScan, getScanStatus, startPcScan, startScan } from "@/api/client";
 import { toast } from "@/components/ui";
 import { queryKeys } from "@/shared/lib/queryKeys";
+import type { ScanMode } from "@/shared/types/api";
 
-export function useScan(folder: string) {
+export function useScan(folder: string, scanMode: ScanMode) {
   const queryClient = useQueryClient();
   const wasRunningRef = useRef(false);
 
@@ -19,7 +20,7 @@ export function useScan(folder: string) {
   };
 
   const start = useMutation({
-    mutationFn: () => startScan(folder),
+    mutationFn: () => startScan(folder, scanMode),
     onMutate: () => {
       queryClient.setQueryData(queryKeys.scanStatus(), {
         running: true,
@@ -41,14 +42,14 @@ export function useScan(folder: string) {
         job_id: response.data.job_id ?? null,
         status: "pending",
       });
-      toast({ title: "Scan started" });
+      toast({ title: scanMode === "images" ? "Photo scan started" : scanMode === "videos" ? "Video scan started" : "Mixed media scan started" });
       invalidate(response.data.job_id);
     },
     onError: () => toast({ title: "Failed to start scan", variant: "error" }),
   });
 
   const startPc = useMutation({
-    mutationFn: () => startPcScan(),
+    mutationFn: () => startPcScan(scanMode),
     onMutate: () => {
       queryClient.setQueryData(queryKeys.scanStatus(), {
         running: true,
@@ -70,7 +71,7 @@ export function useScan(folder: string) {
         job_id: response.data.job_id ?? null,
         status: "pending",
       });
-      toast({ title: "Full PC scan started" });
+      toast({ title: scanMode === "images" ? "Full PC photo scan started" : scanMode === "videos" ? "Full PC video scan started" : "Full PC mixed scan started" });
       invalidate(response.data.job_id);
     },
     onError: () => toast({ title: "Failed to start full PC scan", variant: "error" }),

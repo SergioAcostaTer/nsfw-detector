@@ -1,12 +1,16 @@
 import { ChevronDown, ChevronUp, Cpu, HardDrive, Shield } from "lucide-react";
 import { useState } from "react";
 
+import type { ScanMode } from "@/shared/types/api";
+
 export function ScanAllCard({
   onStart,
   disabled,
+  scanMode,
 }: {
   onStart: () => void;
   disabled?: boolean;
+  scanMode: ScanMode;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -16,7 +20,7 @@ export function ScanAllCard({
         <div>
           <p className="text-lg font-semibold">Scan Entire PC</p>
           <p className="mt-1 text-sm" style={{ color: "var(--ink-2)" }}>
-            Discover images across mounted drives, skip system folders, and process them with the same detection pipeline.
+            Discover {scanMode === "images" ? "photos" : scanMode === "videos" ? "videos" : "photos and videos"} across mounted drives, skip system folders, and process them with the same detection pipeline.
           </p>
           <div className="mt-4 flex flex-wrap gap-2 text-xs">
             {[
@@ -36,7 +40,7 @@ export function ScanAllCard({
           className="rounded-2xl px-4 py-2 text-sm font-medium disabled:opacity-40"
           style={{ background: "var(--blue)", color: "#fff" }}
         >
-          Start full scan
+          {scanMode === "images" ? "Start full photo scan" : scanMode === "videos" ? "Start full video scan" : "Start full mixed scan"}
         </button>
       </div>
 

@@ -59,6 +59,7 @@ def should_skip(path: Path, skip_folders: list[Path]) -> bool:
 def iter_pc_images(
     roots: list[Path] | None = None,
     *,
+    scan_mode: str = "both",
     custom_skip_folders: list[str] | None = None,
     cancel_event: Event | None = None,
     progress_callback=None,
@@ -82,7 +83,15 @@ def iter_pc_images(
             if current.is_symlink():
                 continue
             if current.is_file():
-                if current.suffix.lower() in IMAGE_EXTENSIONS + VIDEO_EXTENSIONS:
+                suffix = current.suffix.lower()
+                include = (
+                    suffix in IMAGE_EXTENSIONS
+                    if scan_mode == "images"
+                    else suffix in VIDEO_EXTENSIONS
+                    if scan_mode == "videos"
+                    else suffix in IMAGE_EXTENSIONS + VIDEO_EXTENSIONS
+                )
+                if include:
                     files.append(current)
                 continue
 

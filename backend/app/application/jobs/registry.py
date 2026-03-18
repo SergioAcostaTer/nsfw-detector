@@ -26,8 +26,10 @@ def ensure_jobs_registered():
 
     def scan_folder_job(job):
         target = Path(job.payload["folder"])
+        scan_mode = job.payload.get("scan_mode", "images")
         cancel_event = Event()
         job.meta["cancel_event"] = cancel_event
+        job.meta["scan_mode"] = scan_mode
 
         def update_progress(index: int, total: int, flagged: int, current_file: str = ""):
             job.meta["current_file"] = current_file
@@ -37,16 +39,30 @@ def ensure_jobs_registered():
             if job.cancelled:
                 cancel_event.set()
 
-        result = scan_folder(target, session_id=job.payload["session_id"], progress_callback=update_progress, cancel_event=cancel_event)
+        result = scan_folder(
+            target,
+            session_id=job.payload["session_id"],
+            progress_callback=update_progress,
+            cancel_event=cancel_event,
+            scan_mode=scan_mode,
+        )
         if result["status"] == "cancelled":
             _finish_session(job.payload["session_id"], status="cancelled", total=result["total"], flagged=result["flagged"])
         return result
 
     def scan_pc_job(job):
         settings = load_settings()
+        scan_mode = job.payload.get("scan_mode", "images")
         cancel_event = Event()
         job.meta["cancel_event"] = cancel_event
-        files = list(iter_pc_images(custom_skip_folders=settings.get("custom_skip_folders", []), cancel_event=cancel_event))
+        job.meta["scan_mode"] = scan_mode
+        files = list(
+            iter_pc_images(
+                scan_mode=scan_mode,
+                custom_skip_folders=settings.get("custom_skip_folders", []),
+                cancel_event=cancel_event,
+            )
+        )
         job.meta["total"] = len(files)
 
         def update_progress(index: int, total: int, flagged: int, current_file: str = ""):
@@ -83,7 +99,10 @@ def recover_running_sessions():
 
     for session in sessions:
         if session["folder"] == "This PC":
-            job = job_queue.enqueue("scan_pc", {"session_id": session["id"], "recovered": True})
+            job = job_queue.enqueue(
+                "scan_pc",
+                {"session_id": session["id"], "scan_mode": session.get("scan_mode", "images"), "recovered": True},
+            )
         else:
             target = Path(session["folder"])
             if not target.exists() or not target.is_dir():
@@ -104,7 +123,12 @@ def recover_running_sessions():
                 continue
             job = job_queue.enqueue(
                 "scan_folder",
-                {"folder": session["folder"], "session_id": session["id"], "recovered": True},
+                {
+                    "folder": session["folder"],
+                    "session_id": session["id"],
+                    "scan_mode": session.get("scan_mode", "images"),
+                    "recovered": True,
+                },
             )
 
         job.meta["recovered"] = True
