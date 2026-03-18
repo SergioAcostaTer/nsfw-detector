@@ -4,10 +4,11 @@ import { BrowserRouter, Link, Route, Routes } from "react-router-dom";
 import { AppShell } from "@/components/layout/AppShell";
 import { Activity } from "@/pages/Activity";
 import { Dashboard } from "@/pages/Dashboard";
-import { Quarantine } from "@/pages/Quarantine";
 import { Review } from "@/pages/Review";
 import { Scan } from "@/pages/Scan";
 import { Settings } from "@/pages/Settings";
+import { Trash } from "@/pages/Trash";
+import { Vault } from "@/pages/Vault";
 
 function NotFound() {
   return (
@@ -36,7 +37,9 @@ export function AppRouter({ children }: { children?: ReactNode }) {
           <Route path="/" element={<Dashboard />} />
           <Route path="/scan" element={<Scan />} />
           <Route path="/review" element={<Review />} />
-          <Route path="/quarantine" element={<Quarantine />} />
+          <Route path="/trash" element={<Trash />} />
+          <Route path="/vault" element={<Vault />} />
+          <Route path="/quarantine" element={<Trash />} />
           <Route path="/activity" element={<Activity />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="*" element={<NotFound />} />

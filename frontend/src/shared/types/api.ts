@@ -1,5 +1,5 @@
 export type Decision = "explicit" | "borderline" | "safe";
-export type FileStatus = "active" | "quarantined" | "deleted";
+export type FileStatus = "active" | "quarantined" | "vaulted" | "deleted";
 export type ThemeMode = "dark" | "light" | "system";
 export type ScanMode = "images" | "videos" | "both";
 
@@ -9,6 +9,7 @@ export interface ScanResult {
   folder: string;
   status: FileStatus;
   quarantined_at: number | null;
+  vaulted_at?: number | null;
   type?: "image" | "video";
   frame_count?: number;
   duration?: number;
@@ -23,6 +24,7 @@ export interface ScanResult {
 export interface Stats {
   decisions: Record<string, number>;
   quarantined: number;
+  vaulted: number;
   recent_sessions: ScanSession[];
 }
 

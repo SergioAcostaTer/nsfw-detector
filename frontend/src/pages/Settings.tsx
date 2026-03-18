@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
-import { deleteExpiredQuarantine, getSettings, resetAppState, updateSettings, type AppSettings, type ThemeMode } from "@/api/client";
+import { deleteExpiredTrash, getSettings, resetAppState, updateSettings, type AppSettings, type ThemeMode } from "@/api/client";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { ConfirmDialog, toast } from "@/components/ui";
 import { applyTheme, storeTheme } from "@/shared/lib/theme";
@@ -73,7 +73,7 @@ export function Settings() {
   });
 
   const cleanup = useMutation({
-    mutationFn: () => deleteExpiredQuarantine(),
+    mutationFn: () => deleteExpiredTrash(),
     onSuccess: (response) => {
       queryClient.invalidateQueries({ queryKey: ["quarantine"] });
       queryClient.invalidateQueries({ queryKey: ["stats"] });
@@ -104,7 +104,7 @@ export function Settings() {
     <div className="space-y-6">
       <PageHeader
         title="Settings"
-        subtitle="Inference preferences, quarantine retention, exclusions, and appearance."
+        subtitle="Inference preferences, trash retention, exclusions, and appearance."
         actions={
           <button
             onClick={() => save.mutate(localSettings)}
@@ -177,7 +177,7 @@ export function Settings() {
         </div>
       </Section>
 
-      <Section title="Quarantine" description="Control how long quarantined files are retained before cleanup.">
+      <Section title="Trash" description="Control how long soft-deleted files are retained before cleanup.">
         <div className="flex flex-wrap items-center gap-3">
           <select
             value={localSettings.auto_delete_days}

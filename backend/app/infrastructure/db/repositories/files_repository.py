@@ -12,7 +12,7 @@ class FilesRepository:
         rows = self.conn.execute(
             f"""
             SELECT id, path, status, mtime, fingerprint, hash, folder, quarantined_at, type, frame_count, duration
-                 , phash
+                 , phash, vaulted_at
             FROM files
             WHERE path IN ({placeholders})
             """,
@@ -32,6 +32,7 @@ class FilesRepository:
                 "frame_count": row[9],
                 "duration": row[10],
                 "phash": row[11],
+                "vaulted_at": row[12],
             }
             for row in rows
         }
@@ -39,7 +40,7 @@ class FilesRepository:
     def get_by_id(self, file_id: int):
         row = self.conn.execute(
             """
-            SELECT id, path, folder, status, quarantined_at, hash, type, frame_count, duration, phash
+            SELECT id, path, folder, status, quarantined_at, hash, type, frame_count, duration, phash, vaulted_at
             FROM files
             WHERE id = ?
             """,
@@ -58,13 +59,14 @@ class FilesRepository:
             "frame_count": row[7],
             "duration": row[8],
             "phash": row[9],
+            "vaulted_at": row[10],
         }
 
     def upsert_many(self, records: list[dict]):
         self.conn.executemany(
             """
-            INSERT INTO files (path, size, mtime, hash, folder, status, last_scanned_at, deleted_at, type, frame_count, duration, fingerprint, phash)
-            VALUES (:path, :size, :mtime, :hash, :folder, 'active', :last_scanned_at, NULL, :type, :frame_count, :duration, :fingerprint, :phash)
+            INSERT INTO files (path, size, mtime, hash, folder, status, last_scanned_at, quarantined_at, vaulted_at, deleted_at, type, frame_count, duration, fingerprint, phash)
+            VALUES (:path, :size, :mtime, :hash, :folder, 'active', :last_scanned_at, NULL, NULL, NULL, :type, :frame_count, :duration, :fingerprint, :phash)
             ON CONFLICT(path) DO UPDATE SET
                 size=excluded.size,
                 mtime=excluded.mtime,
@@ -72,6 +74,8 @@ class FilesRepository:
                 folder=excluded.folder,
                 status='active',
                 last_scanned_at=excluded.last_scanned_at,
+                quarantined_at=NULL,
+                vaulted_at=NULL,
                 deleted_at=NULL,
                 type=excluded.type,
                 frame_count=excluded.frame_count,
@@ -94,13 +98,19 @@ class FilesRepository:
 
     def mark_quarantined(self, file_id: int, new_path: str, quarantined_at: int):
         self.conn.execute(
-            "UPDATE files SET status='quarantined', path=?, quarantined_at=? WHERE id=?",
+            "UPDATE files SET status='quarantined', path=?, quarantined_at=?, vaulted_at=NULL WHERE id=?",
             (new_path, quarantined_at, file_id),
+        )
+
+    def mark_vaulted(self, file_id: int, new_path: str, vaulted_at: int):
+        self.conn.execute(
+            "UPDATE files SET status='vaulted', path=?, vaulted_at=?, quarantined_at=NULL WHERE id=?",
+            (new_path, vaulted_at, file_id),
         )
 
     def mark_restored(self, file_id: int, restored_path: str):
         self.conn.execute(
-            "UPDATE files SET status='active', path=?, quarantined_at=NULL WHERE id=?",
+            "UPDATE files SET status='active', path=?, quarantined_at=NULL, vaulted_at=NULL WHERE id=?",
             (restored_path, file_id),
         )
 

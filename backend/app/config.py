@@ -5,7 +5,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 DB_PATH = BASE_DIR / "data" / "scanner.db"
 MODEL_PATH = BASE_DIR / "models" / "nudenet.onnx"
 CLASSIFIER_MODEL_PATH = BASE_DIR / "models" / "mobilenetv2.onnx"
-QUARANTINE_DIR = BASE_DIR / "quarantine"
+TRASH_DIR = BASE_DIR / "trash"
+VAULT_DIR = BASE_DIR / "vault"
 CACHE_DIR = BASE_DIR / "cache"
 THUMBNAIL_CACHE_DIR = CACHE_DIR / "thumbnails"
 

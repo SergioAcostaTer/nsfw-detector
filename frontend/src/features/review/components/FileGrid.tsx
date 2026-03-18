@@ -19,6 +19,7 @@ export function FileCard({
   onDoubleClick,
   onRescue,
   onQuarantine,
+  onVault,
   onDelete,
 }: {
   item: ScanResult;
@@ -32,6 +33,7 @@ export function FileCard({
   onDoubleClick: () => void;
   onRescue: () => void;
   onQuarantine: () => void;
+  onVault: () => void;
   onDelete: () => void;
 }) {
   const Icon = item.type === "video" ? Film : ImageIcon;
@@ -126,6 +128,7 @@ export function FileGrid({
   onItemDoubleClick,
   onRescue,
   onQuarantine,
+  onVault,
   onDelete,
 }: {
   items: ScanResult[];
@@ -143,6 +146,7 @@ export function FileGrid({
   onItemDoubleClick: (item: ScanResult) => void;
   onRescue: (item: ScanResult) => void;
   onQuarantine: (item: ScanResult) => void;
+  onVault: (item: ScanResult) => void;
   onDelete: (item: ScanResult) => void;
 }) {
   const rowCount = Math.ceil(items.length / gridCols);
@@ -214,6 +218,7 @@ export function FileGrid({
                       onDoubleClick={() => onItemDoubleClick(item)}
                       onRescue={() => onRescue(item)}
                       onQuarantine={() => onQuarantine(item)}
+                      onVault={() => onVault(item)}
                       onDelete={() => onDelete(item)}
                     />
                   );

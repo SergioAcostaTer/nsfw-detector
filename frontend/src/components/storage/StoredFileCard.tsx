@@ -15,19 +15,21 @@ function urgencyStyle(days: number) {
   return { border: "var(--border-subtle)", glow: "transparent", text: "var(--text-muted)" };
 }
 
-export function QuarantineCard({
+export function StoredFileCard({
   item,
   daysLeft,
+  mode = "trash",
   onRestore,
   onDelete,
 }: {
   item: ScanResult;
   daysLeft: number;
+  mode?: "trash" | "vault";
   onRestore: () => void;
   onDelete: () => void;
 }) {
-  const urgent = daysLeft <= 5;
-  const style = urgencyStyle(daysLeft);
+  const urgent = mode === "trash" && daysLeft <= 5;
+  const style = mode === "trash" ? urgencyStyle(daysLeft) : { border: "var(--blue)", glow: "rgba(59,130,246,0.15)", text: "var(--blue)" };
   const filename = item.path.split(/[\\/]/).pop() ?? item.path;
 
   return (
@@ -41,10 +43,10 @@ export function QuarantineCard({
         />
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-1">
           <span className="font-mono text-2xl font-semibold" style={{ color: style.text }}>
-            {daysLeft}d
+            {mode === "trash" ? `${daysLeft}d` : "Vault"}
           </span>
           <span className="text-xs" style={{ color: "var(--ink-2)" }}>
-            until deletion
+            {mode === "trash" ? "until deletion" : "private storage"}
           </span>
         </div>
       </div>

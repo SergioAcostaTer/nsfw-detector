@@ -3,7 +3,8 @@ import { useSyncExternalStore } from "react";
 type ReviewFilter = "all" | "explicit" | "borderline" | "safe";
 
 type UndoAction =
-  | { type: "quarantine"; ids: number[] }
+  | { type: "vault"; ids: number[] }
+  | { type: "trash"; ids: number[] }
   | { type: "rescue"; ids: number[] }
   | { type: "unrescue"; ids: number[] };
 

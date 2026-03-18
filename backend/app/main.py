@@ -6,14 +6,14 @@ from app.api.routes import (
     admin_router,
     export_router,
     health_router,
-    quarantine_router,
     results_router,
     scan_router,
     sessions_router,
     settings_router,
+    storage_router,
 )
 from app.application.jobs.registry import ensure_jobs_registered, recover_running_sessions
-from app.config import QUARANTINE_DIR
+from app.config import TRASH_DIR, VAULT_DIR
 from app.db.migrate import run_migrations
 from app.db.models import init_db
 from app.db.session import get_db
@@ -35,7 +35,7 @@ def create_app():
     app.include_router(settings_router)
     app.include_router(scan_router)
     app.include_router(results_router)
-    app.include_router(quarantine_router)
+    app.include_router(storage_router)
     app.include_router(sessions_router)
     app.include_router(export_router)
 
@@ -44,7 +44,8 @@ def create_app():
     @app.on_event("startup")
     def on_startup():
         nonlocal scheduler
-        QUARANTINE_DIR.mkdir(parents=True, exist_ok=True)
+        TRASH_DIR.mkdir(parents=True, exist_ok=True)
+        VAULT_DIR.mkdir(parents=True, exist_ok=True)
         with get_db() as conn:
             init_db(conn)
             run_migrations(conn)

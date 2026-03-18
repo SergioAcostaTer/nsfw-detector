@@ -31,7 +31,7 @@ export function MassActionBar({
           style={{ background: "var(--violet-dim)", color: "var(--violet)" }}
         >
           <Archive size={16} />
-          Quarantine Remaining ({remaining})
+          Vault Remaining ({remaining})
         </button>
         <button
           type="button"

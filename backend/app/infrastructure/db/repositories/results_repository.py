@@ -91,7 +91,7 @@ class ResultsRepository:
         order_clause = sort_map.get(sort_by, "r.score DESC, r.created_at DESC")
         rows = self.conn.execute(
             f"""
-            SELECT f.id, f.path, f.folder, f.status, f.quarantined_at, f.type, f.frame_count, f.duration,
+            SELECT f.id, f.path, f.folder, f.status, f.quarantined_at, f.vaulted_at, f.type, f.frame_count, f.duration,
                    r.decision, r.score, r.classes, r.created_at, r.avg_score, r.max_score
             FROM files f
             {self._latest_result_join()}
@@ -120,15 +120,16 @@ class ResultsRepository:
                 "folder": row[2],
                 "status": row[3],
                 "quarantined_at": row[4],
-                "type": row[5],
-                "frame_count": row[6],
-                "duration": row[7],
-                "decision": row[8],
-                "score": row[9],
-                "classes": row[10],
-                "created_at": row[11],
-                "avg_score": row[12],
-                "max_score": row[13],
+                "vaulted_at": row[5],
+                "type": row[6],
+                "frame_count": row[7],
+                "duration": row[8],
+                "decision": row[9],
+                "score": row[10],
+                "classes": row[11],
+                "created_at": row[12],
+                "avg_score": row[13],
+                "max_score": row[14],
             }
             for row in rows
         ]
@@ -155,7 +156,7 @@ class ResultsRepository:
     def get_session_results(self, started_at: int, ended_at: int):
         rows = self.conn.execute(
             """
-            SELECT f.id, f.path, f.folder, f.status, f.quarantined_at, f.type, f.frame_count, f.duration,
+            SELECT f.id, f.path, f.folder, f.status, f.quarantined_at, f.vaulted_at, f.type, f.frame_count, f.duration,
                    r.decision, r.score, r.classes, r.created_at, r.avg_score, r.max_score
             FROM results r
             JOIN files f ON f.id = r.file_id
@@ -172,15 +173,16 @@ class ResultsRepository:
                 "folder": row[2],
                 "status": row[3],
                 "quarantined_at": row[4],
-                "type": row[5],
-                "frame_count": row[6],
-                "duration": row[7],
-                "decision": row[8],
-                "score": row[9],
-                "classes": row[10],
-                "created_at": row[11],
-                "avg_score": row[12],
-                "max_score": row[13],
+                "vaulted_at": row[5],
+                "type": row[6],
+                "frame_count": row[7],
+                "duration": row[8],
+                "decision": row[9],
+                "score": row[10],
+                "classes": row[11],
+                "created_at": row[12],
+                "avg_score": row[13],
+                "max_score": row[14],
             }
             for row in rows
         ]

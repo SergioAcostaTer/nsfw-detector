@@ -1,5 +1,5 @@
 import type { MouseEvent } from "react";
-import { Archive, Loader2, ShieldCheck, Trash2 } from "lucide-react";
+import { Archive, Loader2, Lock, ShieldCheck, Trash2 } from "lucide-react";
 
 import { thumbnailUrl, type ScanResult } from "@/api/client";
 import { Badge } from "@/components/ui";
@@ -15,6 +15,7 @@ export function FileListView({
   onItemClick,
   onRescue,
   onQuarantine,
+  onVault,
   onDelete,
 }: {
   items: ScanResult[];
@@ -26,6 +27,7 @@ export function FileListView({
   onItemClick: (event: MouseEvent, id: number, index: number) => void;
   onRescue: (item: ScanResult) => void;
   onQuarantine: (item: ScanResult) => void;
+  onVault: (item: ScanResult) => void;
   onDelete: (item: ScanResult) => void;
 }) {
   return (
@@ -84,6 +86,9 @@ export function FileListView({
                 <>
                   <button type="button" disabled={isPending} onClick={(event) => { event.stopPropagation(); onQuarantine(item); }} className="rounded-md p-1.5 text-[var(--status-quarantine)] hover:bg-[var(--status-quarantine-bg)]">
                     {isPending ? <Loader2 size={14} className="animate-spin" /> : <Archive size={14} />}
+                  </button>
+                  <button type="button" disabled={isPending} onClick={(event) => { event.stopPropagation(); onVault(item); }} className="rounded-md p-1.5 text-[var(--blue)] hover:bg-[var(--blue-dim)]">
+                    {isPending ? <Loader2 size={14} className="animate-spin" /> : <Lock size={14} />}
                   </button>
                   <button type="button" disabled={isPending} onClick={(event) => { event.stopPropagation(); onDelete(item); }} className="rounded-md p-1.5 text-[var(--status-explicit)] hover:bg-[var(--status-explicit-bg)]">
                     {isPending ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}

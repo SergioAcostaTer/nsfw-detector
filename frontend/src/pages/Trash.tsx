@@ -1,11 +1,11 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
-import { deleteExpiredQuarantine, getSettings } from "@/api/client";
+import { deleteExpiredTrash, getSettings } from "@/api/client";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { QuarantineCard } from "@/components/quarantine/QuarantineCard";
+import { StoredFileCard } from "@/components/storage/StoredFileCard";
 import { ConfirmDialog, EmptyState, toast } from "@/components/ui";
-import { useQuarantine } from "@/hooks/useQuarantine";
+import { useTrash } from "@/hooks/useTrash";
 
 function daysLeft(quarantinedAt: number | null, deleteAfter: number): number {
   if (!quarantinedAt) {
@@ -15,26 +15,26 @@ function daysLeft(quarantinedAt: number | null, deleteAfter: number): number {
   return Math.max(0, deleteAfter - Math.floor(elapsed / 86400));
 }
 
-export function Quarantine() {
+export function Trash() {
   const queryClient = useQueryClient();
-  const { quarantine, restore, remove } = useQuarantine();
+  const { trash, restore, remove } = useTrash();
   const { data: settings } = useQuery({ queryKey: ["settings"], queryFn: () => getSettings().then((response) => response.data) });
   const [pendingDeleteIds, setPendingDeleteIds] = useState<number[]>([]);
-  const items = quarantine.data?.items ?? [];
+  const items = trash.data?.items ?? [];
   const expiringSoon = items.filter((item) => daysLeft(item.quarantined_at, settings?.auto_delete_days ?? 30) <= 7);
   const rest = items.filter((item) => daysLeft(item.quarantined_at, settings?.auto_delete_days ?? 30) > 7);
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Quarantine"
-        subtitle={`Files are permanently deleted after ${settings?.auto_delete_days ?? 30} days`}
+        title="Trash"
+        subtitle={`Soft-deleted files keep their original location for restore and are permanently deleted after ${settings?.auto_delete_days ?? 30} days`}
         actions={
           <button
             onClick={async () => {
               try {
-                const response = await deleteExpiredQuarantine();
-                queryClient.invalidateQueries({ queryKey: ["quarantine"] });
+                const response = await deleteExpiredTrash();
+                queryClient.invalidateQueries({ queryKey: ["trash"] });
                 queryClient.invalidateQueries({ queryKey: ["stats"] });
                 toast({ title: `${response.data.deleted} expired file${response.data.deleted === 1 ? "" : "s"} removed` });
               } catch {
@@ -50,7 +50,7 @@ export function Quarantine() {
       />
 
       {items.length === 0 ? (
-        <EmptyState title="Quarantine is empty" description="Flagged files moved here will stay available for restore until cleanup." />
+        <EmptyState title="Trash is empty" description="Soft-deleted files stay available for restore to their original folder until cleanup." />
       ) : (
         <div className="space-y-6">
           {expiringSoon.length > 0 ? (
@@ -58,10 +58,11 @@ export function Quarantine() {
               <h2 className="text-sm font-semibold text-[var(--red)]">Expiring soon · {expiringSoon.length}</h2>
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
                 {expiringSoon.map((item) => (
-                  <QuarantineCard
+                  <StoredFileCard
                     key={item.id}
                     item={item}
                     daysLeft={daysLeft(item.quarantined_at, settings?.auto_delete_days ?? 30)}
+                    mode="trash"
                     onRestore={() => restore.mutate([item.id])}
                     onDelete={() => setPendingDeleteIds([item.id])}
                   />
@@ -70,13 +71,14 @@ export function Quarantine() {
             </section>
           ) : null}
           <section className="space-y-3">
-            <h2 className="text-sm font-semibold text-[var(--ink-1)]">Holding bay</h2>
+            <h2 className="text-sm font-semibold text-[var(--ink-1)]">Trash contents</h2>
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
               {rest.map((item) => (
-                <QuarantineCard
+                <StoredFileCard
                   key={item.id}
                   item={item}
                   daysLeft={daysLeft(item.quarantined_at, settings?.auto_delete_days ?? 30)}
+                  mode="trash"
                   onRestore={() => restore.mutate([item.id])}
                   onDelete={() => setPendingDeleteIds([item.id])}
                 />
@@ -88,7 +90,7 @@ export function Quarantine() {
 
       <ConfirmDialog
         open={pendingDeleteIds.length > 0}
-        title="Delete quarantined file?"
+        title="Delete trashed file?"
         description="This permanently deletes the file from disk."
         confirmLabel="Delete file"
         onCancel={() => setPendingDeleteIds([])}

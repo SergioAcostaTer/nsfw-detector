@@ -1,4 +1,4 @@
-import { Archive, CheckCircle2, LayoutGrid, List, ShieldCheck, Trash2 } from "lucide-react";
+import { Archive, CheckCircle2, LayoutGrid, List, Lock, ShieldCheck, Trash2 } from "lucide-react";
 
 export function FileToolbar({
   folderName,
@@ -11,6 +11,7 @@ export function FileToolbar({
   onGridColsChange,
   onRescueSelected,
   onQuarantineSelected,
+  onVaultSelected,
   onDeleteSelected,
   onQuarantineRemaining,
 }: {
@@ -24,6 +25,7 @@ export function FileToolbar({
   onGridColsChange: (next: number) => void;
   onRescueSelected: () => void;
   onQuarantineSelected: () => void;
+  onVaultSelected: () => void;
   onDeleteSelected: () => void;
   onQuarantineRemaining: () => void;
 }) {
@@ -73,7 +75,14 @@ export function FileToolbar({
                   onClick={onQuarantineSelected}
                   className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-[var(--ink-1)] transition-colors hover:bg-[var(--bg-2)]"
                 >
-                  <Archive size={16} /> Quarantine
+                  <Archive size={16} /> Move to Trash
+                </button>
+                <button
+                  type="button"
+                  onClick={onVaultSelected}
+                  className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-[var(--blue)] transition-colors hover:bg-[var(--blue-dim)]"
+                >
+                  <Lock size={16} /> Move to Vault
                 </button>
                 <button
                   type="button"
@@ -93,7 +102,7 @@ export function FileToolbar({
             className="flex items-center gap-1.5 rounded-lg bg-blue-500 px-4 py-1.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-600 disabled:opacity-50"
           >
             <CheckCircle2 size={16} />
-            {safeMode ? `Safe Files (${totalRemaining})` : `Clean Folder (${totalRemaining})`}
+            {safeMode ? `Safe Files (${totalRemaining})` : `Trash Remaining (${totalRemaining})`}
           </button>
         )}
       </div>

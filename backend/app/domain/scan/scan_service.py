@@ -80,7 +80,7 @@ def scan_folder_files(
                     current_file = path.name
                     try:
                         existing = manifest.get(str(path))
-                        if existing and existing["status"] in ("quarantined", "deleted"):
+                        if existing and existing["status"] in ("quarantined", "vaulted", "deleted"):
                             tracker.increment(current_file=current_file)
                             continue
                         media_type = media_type_for_path(path)

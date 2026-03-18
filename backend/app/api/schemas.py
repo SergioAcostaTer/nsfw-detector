@@ -52,6 +52,7 @@ class ScanResultItem(BaseModel):
     folder: str
     status: str
     quarantined_at: Optional[int] = None
+    vaulted_at: Optional[int] = None
     type: Literal["image", "video"] | str = "image"
     frame_count: Optional[int] = 0
     duration: Optional[float] = 0

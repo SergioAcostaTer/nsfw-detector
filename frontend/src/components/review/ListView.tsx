@@ -75,7 +75,7 @@ export function ListView({
                     className="rounded-xl px-3 py-2 text-xs font-medium"
                     style={{ background: "var(--violet-dim)", color: "var(--violet)" }}
                   >
-                    <Archive size={12} className="inline-block" /> Quarantine
+                    <Archive size={12} className="inline-block" /> Vault
                   </button>
                   <button
                     onClick={() => onDelete([item.id])}

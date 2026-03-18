@@ -1,4 +1,4 @@
-import { AlertCircle, Archive, Calendar, HardDrive, Loader2, ShieldCheck, Trash2, Video } from "lucide-react";
+import { AlertCircle, Archive, Calendar, HardDrive, Loader2, Lock, ShieldCheck, Trash2, Video } from "lucide-react";
 
 import { imageUrl, type ScanResult } from "@/api/client";
 import { Button, Kbd, SkeletonInspector } from "@/components/ui";
@@ -20,17 +20,21 @@ export function FileDetailsPane({
   item,
   onRescue,
   onQuarantine,
+  onVault,
   onDelete,
   rescuePending = false,
   quarantinePending = false,
+  vaultPending = false,
   deletePending = false,
 }: {
   item: ScanResult | null;
   onRescue?: (item: ScanResult) => void;
   onQuarantine?: (item: ScanResult) => void;
+  onVault?: (item: ScanResult) => void;
   onDelete?: (item: ScanResult) => void;
   rescuePending?: boolean;
   quarantinePending?: boolean;
+  vaultPending?: boolean;
   deletePending?: boolean;
 }) {
   if (!item) {
@@ -110,9 +114,15 @@ export function FileDetailsPane({
         </Button>
         <Button variant="ghost" className="w-full justify-between text-[var(--status-quarantine)]" onClick={() => onQuarantine?.(item)} disabled={quarantinePending}>
           <span className="flex items-center gap-2">
-            {quarantinePending ? <Loader2 size={16} className="animate-spin" /> : <Archive size={16} />} Move to Quarantine
+            {quarantinePending ? <Loader2 size={16} className="animate-spin" /> : <Archive size={16} />} Move to Trash
           </span>
           {!quarantinePending ? <Kbd>Q</Kbd> : null}
+        </Button>
+        <Button variant="ghost" className="w-full justify-between text-[var(--blue)]" onClick={() => onVault?.(item)} disabled={vaultPending}>
+          <span className="flex items-center gap-2">
+            {vaultPending ? <Loader2 size={16} className="animate-spin" /> : <Lock size={16} />} Move to Vault
+          </span>
+          {!vaultPending ? <Kbd>V</Kbd> : null}
         </Button>
         <Button variant="danger" className="w-full justify-between" onClick={() => onDelete?.(item)} disabled={deletePending}>
           <span className="flex items-center gap-2">

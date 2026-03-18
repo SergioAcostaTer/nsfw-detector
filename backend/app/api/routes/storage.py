@@ -6,7 +6,7 @@ from fastapi import APIRouter
 from app.actions.delete import delete_file
 from app.api.schemas import ActionRequest
 from app.db.session import get_db
-from app.domain.quarantine.quarantine_service import quarantine_path, restore_destination
+from app.domain.storage.storage_service import restore_destination, trash_path, vault_path
 from app.infrastructure.db.repositories.files_repository import FilesRepository
 from app.jobs.auto_delete import run_auto_delete
 from app.settings import load_settings
@@ -15,8 +15,7 @@ from app.shared.utils import now_s
 router = APIRouter()
 
 
-@router.post("/quarantine")
-def quarantine_files(req: ActionRequest):
+def _move_files(req: ActionRequest, *, target: str):
     moved = []
     with get_db() as conn:
         repo = FilesRepository(conn)
@@ -24,15 +23,33 @@ def quarantine_files(req: ActionRequest):
             record = repo.get_by_id(file_id)
             if record is None:
                 continue
-            new_path = quarantine_path(record["path"])
-            repo.mark_quarantined(file_id, new_path, now_s())
+            if target == "vault":
+                new_path = vault_path(record["path"])
+                repo.mark_vaulted(file_id, new_path, now_s())
+            else:
+                new_path = trash_path(record["path"])
+                repo.mark_quarantined(file_id, new_path, now_s())
             moved.append({"id": file_id, "new_path": new_path})
         conn.commit()
     return {"moved": moved}
 
 
-@router.post("/restore")
-def restore_files(req: ActionRequest):
+@router.post("/vault")
+def vault_files(req: ActionRequest):
+    return _move_files(req, target="vault")
+
+
+@router.post("/trash")
+def trash_files(req: ActionRequest):
+    return _move_files(req, target="trash")
+
+
+@router.post("/quarantine")
+def quarantine_files(req: ActionRequest):
+    return trash_files(req)
+
+
+def _restore_files(req: ActionRequest):
     restored = []
     with get_db() as conn:
         repo = FilesRepository(conn)
@@ -53,6 +70,21 @@ def restore_files(req: ActionRequest):
     return {"restored": restored}
 
 
+@router.post("/unvault")
+def unvault_files(req: ActionRequest):
+    return _restore_files(req)
+
+
+@router.post("/restore-trash")
+def restore_trash_files(req: ActionRequest):
+    return _restore_files(req)
+
+
+@router.post("/restore")
+def restore_files(req: ActionRequest):
+    return restore_trash_files(req)
+
+
 @router.delete("/delete")
 def delete_files(req: ActionRequest):
     deleted = []
@@ -69,6 +101,16 @@ def delete_files(req: ActionRequest):
     return {"deleted": deleted}
 
 
+@router.delete("/vault/expired")
+def trigger_vault_auto_delete():
+    return {"deleted": 0}
+
+
+@router.delete("/trash/expired")
+def trigger_trash_auto_delete():
+    return {"deleted": run_auto_delete(load_settings().get("auto_delete_days", 30))}
+
+
 @router.delete("/quarantine/expired")
 def trigger_auto_delete():
-    return {"deleted": run_auto_delete(load_settings().get("auto_delete_days", 30))}
+    return trigger_trash_auto_delete()

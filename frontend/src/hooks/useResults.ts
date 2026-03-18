@@ -1,6 +1,6 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { deleteFiles, getResults, getResultsCount, quarantineFiles } from "@/api/client";
+import { deleteFiles, getResults, getResultsCount, trashFiles } from "@/api/client";
 import { toast } from "@/components/ui";
 import { queryKeys } from "@/shared/lib/queryKeys";
 
@@ -37,13 +37,13 @@ export function useResults(filter: string, folder: string | null, sortBy: string
     queryClient.invalidateQueries({ queryKey: queryKeys.folders });
   };
 
-  const quarantine = useMutation({
-    mutationFn: (ids: number[]) => quarantineFiles(ids),
+  const trash = useMutation({
+    mutationFn: (ids: number[]) => trashFiles(ids),
     onSuccess: (_response, ids) => {
-      toast({ title: `${ids.length} file${ids.length === 1 ? "" : "s"} quarantined` });
+      toast({ title: `${ids.length} file${ids.length === 1 ? "" : "s"} moved to trash` });
       invalidate();
     },
-    onError: () => toast({ title: "Failed to quarantine files", variant: "error" }),
+    onError: () => toast({ title: "Failed to move files to trash", variant: "error" }),
   });
 
   const remove = useMutation({
@@ -58,5 +58,5 @@ export function useResults(filter: string, folder: string | null, sortBy: string
   const items = resultsQuery.data?.pages.flatMap((page) => page.items) ?? [];
   const total = resultsQuery.data?.pages[0]?.total ?? 0;
 
-  return { resultsQuery, items, total, counts, quarantine, remove };
+  return { resultsQuery, items, total, counts, trash, remove };
 }

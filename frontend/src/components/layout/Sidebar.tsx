@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Activity, Archive, ChevronLeft, ChevronRight, Keyboard, LayoutDashboard, ScanLine, Settings, Shield, TriangleAlert } from "lucide-react";
+import { Activity, Archive, ChevronLeft, ChevronRight, Keyboard, LayoutDashboard, Lock, ScanLine, Settings, Shield, TriangleAlert } from "lucide-react";
 import { NavLink } from "react-router-dom";
 
 import { appStore } from "@/app/store";
@@ -18,12 +18,13 @@ const sections = [
     items: [
       { to: "/scan", icon: ScanLine, label: "Scan", shortcut: "⌘3" },
       { to: "/review", icon: TriangleAlert, label: "Review", shortcut: "⌘4" },
-      { to: "/quarantine", icon: Archive, label: "Quarantine", shortcut: "⌘5" },
+      { to: "/trash", icon: Archive, label: "Trash", shortcut: "⌘5" },
+      { to: "/vault", icon: Lock, label: "Vault", shortcut: "⌘6" },
     ],
   },
   {
     label: "System",
-    items: [{ to: "/settings", icon: Settings, label: "Settings", shortcut: "⌘6" }],
+    items: [{ to: "/settings", icon: Settings, label: "Settings", shortcut: "⌘7" }],
   },
 ] as const;
 
@@ -93,7 +94,7 @@ export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
             ) : null}
             <div className="space-y-1">
               {section.items.map(({ to, icon: Icon, label, shortcut }) => {
-                const badge = to === "/review" ? reviewCount : to === "/quarantine" ? stats?.quarantined ?? 0 : null;
+                const badge = to === "/review" ? reviewCount : to === "/trash" ? stats?.quarantined ?? 0 : to === "/vault" ? stats?.vaulted ?? 0 : null;
                 return (
                   <NavLink
                     key={to}
@@ -116,8 +117,8 @@ export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
                       <span
                         className="rounded-full px-2 py-0.5 text-[11px]"
                         style={{
-                          background: to === "/review" ? "var(--red-dim)" : "var(--violet-dim)",
-                          color: to === "/review" ? "var(--red)" : "var(--violet)",
+                          background: to === "/review" ? "var(--red-dim)" : to === "/trash" ? "var(--violet-dim)" : "var(--blue-dim)",
+                          color: to === "/review" ? "var(--red)" : to === "/trash" ? "var(--violet)" : "var(--blue)",
                         }}
                       >
                         {badge}
@@ -160,7 +161,7 @@ export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
       ) : (
         <div className="mt-auto rounded-2xl border px-4 py-3 text-xs" style={{ borderColor: "var(--line)", background: "var(--bg-2)", color: "var(--ink-2)" }}>
           <p className="font-medium text-[var(--ink-1)]">{collapsed ? "OK" : "Ready"}</p>
-          {!collapsed ? <p className="mt-1">Review and quarantine flows are local-first and reversible.</p> : null}
+          {!collapsed ? <p className="mt-1">Review, trash, and vault flows are local-first and reversible.</p> : null}
         </div>
       )}
 
@@ -181,7 +182,7 @@ export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
             <span className="font-medium">Review keys</span>
           </div>
           <p><span className="font-medium text-[var(--ink-1)]">Arrows</span> move</p>
-          <p><span className="font-medium text-[var(--ink-1)]">S</span> safe · <span className="font-medium text-[var(--ink-1)]">Q</span> quarantine · <span className="font-medium text-[var(--ink-1)]">D</span> delete</p>
+          <p><span className="font-medium text-[var(--ink-1)]">S</span> safe · <span className="font-medium text-[var(--ink-1)]">Q</span> trash · <span className="font-medium text-[var(--ink-1)]">V</span> vault</p>
           <p><span className="font-medium text-[var(--ink-1)]">G</span> grid · <span className="font-medium text-[var(--ink-1)]">L</span> list · <span className="font-medium text-[var(--ink-1)]">Ctrl/Cmd+Z</span> undo</p>
         </div>
       )}

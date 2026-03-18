@@ -11,6 +11,7 @@ def init_db(conn):
             folder          TEXT,
             status          TEXT DEFAULT 'active',
             quarantined_at  INTEGER,
+            vaulted_at      INTEGER,
             deleted_at      INTEGER,
             type            TEXT DEFAULT 'image',
             frame_count     INTEGER DEFAULT 0,

@@ -75,7 +75,7 @@ export function ImageCard({
           className="flex flex-1 items-center justify-center gap-1 rounded-xl py-2 text-xs font-medium"
           style={{ background: "var(--violet-dim)", color: "var(--violet)" }}
         >
-          <Archive size={12} /> Quarantine
+          <Archive size={12} /> Vault
         </button>
         <button
           onClick={onDelete}

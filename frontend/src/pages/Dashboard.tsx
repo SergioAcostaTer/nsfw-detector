@@ -25,7 +25,8 @@ export function Dashboard() {
   const statCards = [
     { label: "Explicit", value: decisions.explicit ?? 0, color: "var(--red)", to: "/review?decision=explicit" },
     { label: "Borderline", value: decisions.borderline ?? 0, color: "var(--amber)", to: "/review?decision=borderline" },
-    { label: "Quarantined", value: stats?.quarantined ?? 0, color: "var(--violet)", to: "/quarantine" },
+    { label: "Trash", value: stats?.quarantined ?? 0, color: "var(--violet)", to: "/trash" },
+    { label: "Vault", value: stats?.vaulted ?? 0, color: "var(--blue)", to: "/vault" },
     { label: "Safe", value: decisions.safe ?? 0, color: "var(--green)" },
   ];
 

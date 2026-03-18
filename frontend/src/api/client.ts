@@ -14,7 +14,15 @@ export type {
   ThemeMode,
 } from "@/shared/types/api";
 export { getSessions } from "@/features/activity/api";
-export { deleteExpiredQuarantine, deleteFiles, quarantineFiles, restoreFiles } from "@/features/quarantine/api";
+export {
+  deleteExpiredTrash,
+  deleteExpiredVault,
+  deleteFiles,
+  restoreTrashFiles,
+  trashFiles,
+  unvaultFiles,
+  vaultFiles,
+} from "@/features/storage/api";
 export { getFileMeta, getFolders, getResults, getResultsCount, getSafeResults, getSessionResults, getStats, rescueFiles, unrescueFiles } from "@/features/review/api";
 export { cancelScan, getScanStatus, startPcScan, startScan } from "@/features/scan/api";
 export { getSettings, resetAppState, updateSettings } from "@/features/settings/api";

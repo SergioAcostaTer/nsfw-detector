@@ -1,9 +1,13 @@
 from pathlib import Path
 
-from app.actions.move import move_to_quarantine
+from app.actions.move import move_to_quarantine, move_to_vault
 
 
-def quarantine_path(path: str) -> str:
+def vault_path(path: str) -> str:
+    return move_to_vault(path)
+
+
+def trash_path(path: str) -> str:
     return move_to_quarantine(path)
 
 

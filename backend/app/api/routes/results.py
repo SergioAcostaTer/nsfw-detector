@@ -117,6 +117,7 @@ def get_stats():
         return {
             "decisions": results_repo.get_decision_stats(),
             "quarantined": files_repo.count_by_status("quarantined"),
+            "vaulted": files_repo.count_by_status("vaulted"),
             "recent_sessions": sessions_repo.get_recent(limit=5),
         }
 

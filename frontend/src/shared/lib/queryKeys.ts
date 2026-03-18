@@ -9,7 +9,8 @@ export const queryKeys = {
   folders: ["folders"] as const,
   sessions: (limit?: number) => ["sessions", limit ?? "default"] as const,
   sessionResults: (sessionId: number | null) => ["sessionResults", sessionId] as const,
-  quarantine: ["quarantine"] as const,
+  trash: ["trash"] as const,
+  vault: ["vault"] as const,
   headerSearch: (query: string) => ["headerSearch", query] as const,
   fileMeta: (path: string | null) => ["fileMeta", path ?? "none"] as const,
 };

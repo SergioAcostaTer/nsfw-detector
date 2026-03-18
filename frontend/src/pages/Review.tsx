@@ -10,13 +10,15 @@ import {
   deleteFiles,
   getFolders,
   getSafeResults,
-  quarantineFiles,
+  restoreTrashFiles,
   rescueFiles,
-  restoreFiles,
+  trashFiles,
   type FolderSummary,
   type ResultsResponse,
   type ScanResult,
   unrescueFiles,
+  unvaultFiles,
+  vaultFiles,
 } from "@/api/client";
 import { ConfirmDialog, DragHandle, EmptyState, Kbd, SkeletonGrid, toast } from "@/components/ui";
 import { ReviewToolbar } from "@/components/review/ReviewToolbar";
@@ -270,7 +272,7 @@ export function Review() {
   });
 
   const quarantineMutation = useMutation({
-    mutationFn: async (ids: number[]) => quarantineFiles(ids),
+    mutationFn: async (ids: number[]) => trashFiles(ids),
     onMutate: (ids) => {
       addPending(ids);
       const snapshot = queryClient.getQueryData<InfiniteData<ResultsResponse>>(currentQueryKey);
@@ -282,29 +284,67 @@ export function Review() {
       if (context?.snapshot) {
         queryClient.setQueryData(currentQueryKey, context.snapshot);
       }
-      toast({ title: "Failed to quarantine files", variant: "error" });
+      toast({ title: "Failed to move files to trash", variant: "error" });
     },
     onSuccess: (_response, ids) => {
       clearPending(ids);
       appStore.clearSelection();
-      appStore.pushUndo({ type: "quarantine", ids });
+      appStore.pushUndo({ type: "trash", ids });
       invalidateMeta();
       advanceFolderIfComplete(ids);
       toast({
-        title: `${ids.length} file${ids.length === 1 ? "" : "s"} quarantined`,
+        title: `${ids.length} file${ids.length === 1 ? "" : "s"} moved to trash`,
         actionLabel: "Undo",
         onAction: () => undoLast(),
       });
     },
   });
 
-  const restoreMutation = useMutation({
-    mutationFn: async (ids: number[]) => restoreFiles(ids),
+  const vaultMutation = useMutation({
+    mutationFn: async (ids: number[]) => vaultFiles(ids),
+    onMutate: (ids) => {
+      addPending(ids);
+      const snapshot = queryClient.getQueryData<InfiniteData<ResultsResponse>>(currentQueryKey);
+      removeFromCurrentQuery(ids);
+      return { snapshot };
+    },
+    onError: (_error, ids, context) => {
+      clearPending(ids);
+      if (context?.snapshot) {
+        queryClient.setQueryData(currentQueryKey, context.snapshot);
+      }
+      toast({ title: "Failed to move files to vault", variant: "error" });
+    },
+    onSuccess: (_response, ids) => {
+      clearPending(ids);
+      appStore.clearSelection();
+      appStore.pushUndo({ type: "vault", ids });
+      invalidateMeta();
+      advanceFolderIfComplete(ids);
+      toast({
+        title: `${ids.length} file${ids.length === 1 ? "" : "s"} moved to vault`,
+        actionLabel: "Undo",
+        onAction: () => undoLast(),
+      });
+    },
+  });
+
+  const restoreTrashMutation = useMutation({
+    mutationFn: async (ids: number[]) => restoreTrashFiles(ids),
     onSuccess: () => {
       invalidateMeta();
-      toast({ title: "Last quarantine action restored" });
+      toast({ title: "Last trash action restored" });
     },
-    onError: () => toast({ title: "Failed to restore files", variant: "error" }),
+    onError: () => toast({ title: "Failed to restore files from trash", variant: "error" }),
+  });
+
+  const restoreVaultMutation = useMutation({
+    mutationFn: async (ids: number[]) => unvaultFiles(ids),
+    onSuccess: () => {
+      invalidateMeta();
+      toast({ title: "Last vault action restored" });
+    },
+    onError: () => toast({ title: "Failed to restore files from vault", variant: "error" }),
   });
 
   const deleteMutation = useMutation({
@@ -336,8 +376,12 @@ export function Review() {
     if (!action) {
       return;
     }
-    if (action.type === "quarantine") {
-      restoreMutation.mutate(action.ids);
+    if (action.type === "trash") {
+      restoreTrashMutation.mutate(action.ids);
+      return;
+    }
+    if (action.type === "vault") {
+      restoreVaultMutation.mutate(action.ids);
       return;
     }
     if (action.type === "rescue") {
@@ -389,6 +433,16 @@ export function Review() {
     const basis = selectedIds.length > 0 ? selectedIds : activeItem ? [activeItem.id] : [];
     if (basis.length > 0) {
       quarantineMutation.mutate(basis);
+    }
+  };
+
+  const handleVaultSelected = () => {
+    if (safeMode) {
+      return;
+    }
+    const basis = selectedIds.length > 0 ? selectedIds : activeItem ? [activeItem.id] : [];
+    if (basis.length > 0) {
+      vaultMutation.mutate(basis);
     }
   };
 
@@ -469,6 +523,11 @@ export function Review() {
       if (!safeMode && event.key.toLowerCase() === "q") {
         event.preventDefault();
         handleQuarantineSelected();
+        return;
+      }
+      if (!safeMode && event.key.toLowerCase() === "v") {
+        event.preventDefault();
+        handleVaultSelected();
         return;
       }
       if (!safeMode && event.key.toLowerCase() === "d") {
@@ -563,6 +622,7 @@ export function Review() {
           onGridColsChange={setGridCols}
           onRescueSelected={handleRescueSelected}
           onQuarantineSelected={handleQuarantineSelected}
+          onVaultSelected={handleVaultSelected}
           onDeleteSelected={handleDeleteSelected}
           onQuarantineRemaining={() => {
             if (!safeMode && remainingItems.length > 0) {
@@ -614,6 +674,12 @@ export function Review() {
                   quarantineMutation.mutate([item.id]);
                 }
               }}
+              onVault={(item) => {
+                if (!safeMode) {
+                  appStore.setLastFocusedId(item.id);
+                  vaultMutation.mutate([item.id]);
+                }
+              }}
               onDelete={(item) => {
                 if (!safeMode) {
                   appStore.setLastFocusedId(item.id);
@@ -632,6 +698,7 @@ export function Review() {
               onItemClick={handleItemClick}
               onRescue={(item) => (safeMode ? unrescueMutation.mutate([item.id]) : rescueMutation.mutate([item.id]))}
               onQuarantine={(item) => !safeMode && quarantineMutation.mutate([item.id])}
+              onVault={(item) => !safeMode && vaultMutation.mutate([item.id])}
               onDelete={(item) => !safeMode && setPendingDeleteIds([item.id])}
             />
           )}
@@ -644,7 +711,7 @@ export function Review() {
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--ink-3)]">Inspector</p>
             <p className="text-sm text-[var(--ink-2)]">
-              <Kbd>S</Kbd> Safe <span className="mx-1">·</span> <Kbd>Q</Kbd> Quarantine <span className="mx-1">·</span> <Kbd>D</Kbd> Delete
+              <Kbd>S</Kbd> Safe <span className="mx-1">·</span> <Kbd>Q</Kbd> Trash <span className="mx-1">·</span> <Kbd>V</Kbd> Vault
             </p>
           </div>
         </div>
@@ -652,9 +719,11 @@ export function Review() {
           item={activeItem}
           onRescue={(item) => (safeMode ? unrescueMutation.mutate([item.id]) : rescueMutation.mutate([item.id]))}
           onQuarantine={(item) => !safeMode && quarantineMutation.mutate([item.id])}
+          onVault={(item) => !safeMode && vaultMutation.mutate([item.id])}
           onDelete={(item) => !safeMode && setPendingDeleteIds([item.id])}
           rescuePending={Boolean(activeItem && pendingIds.has(activeItem.id))}
           quarantinePending={Boolean(activeItem && pendingIds.has(activeItem.id))}
+          vaultPending={Boolean(activeItem && pendingIds.has(activeItem.id))}
           deletePending={Boolean(activeItem && pendingIds.has(activeItem.id))}
         />
       </div>
