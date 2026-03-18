@@ -12,6 +12,7 @@ from app.domain.scan.media_loader import load_images
 from app.domain.scan.progress_service import ProgressTracker
 from app.domain.scan.result_writer import persist_scan_results
 from app.domain.scan.video_scan_service import read_video_duration, scan_video_file, should_skip_video
+from app.infrastructure.db.repositories.files_repository import HELD_FILE_STATUSES
 from app.infrastructure.db.repositories.sessions_repository import SessionsRepository
 from app.settings import load_settings
 from app.scanner.thumbnail import save_thumbnail_from_matrix
@@ -19,6 +20,64 @@ from app.shared.logging import get_logger
 from app.shared.utils import now_ms
 
 logger = get_logger("scan.pipeline")
+
+
+def _resolve_scan_settings(
+    *,
+    explicit_threshold: float | None,
+    borderline_threshold: float | None,
+    batch_size: int | None,
+    video_fps: float | None,
+    preload_workers_override: int | None,
+):
+    settings = load_settings()
+    resolved = {
+        "explicit_threshold": explicit_threshold if explicit_threshold is not None else settings.get("explicit_threshold", 0.6),
+        "borderline_threshold": borderline_threshold if borderline_threshold is not None else settings.get("borderline_threshold", 0.4),
+        "batch_size": batch_size if batch_size is not None else settings.get("batch_size", 8),
+        "video_fps": video_fps if video_fps is not None else settings.get("video_fps", 1.0),
+        "preload_workers": preload_workers_override if preload_workers_override is not None else settings.get("max_preload_workers", 4),
+        "max_video_frames": settings.get("max_video_frames_per_file", 180),
+        "max_video_size_mb": settings.get("max_video_size_mb", 500),
+        "max_video_duration_seconds": settings.get("max_video_duration_seconds", 1800),
+    }
+    if not settings.get("gpu_enabled", True):
+        resolved["batch_size"] = 1
+    return resolved
+
+
+def _is_held_or_unchanged(existing: dict | None, identity: dict) -> bool:
+    if existing and existing["status"] in HELD_FILE_STATUSES:
+        return True
+    return bool(existing and existing.get("fingerprint") == identity["fingerprint"])
+
+
+def _build_entry(item: dict, identity: dict, media_type: str) -> dict:
+    return {
+        "index": item["index"],
+        "path": item["path"],
+        "media_type": media_type,
+        "stat": identity["stat"],
+        "fingerprint": identity["fingerprint"],
+        "hash": identity["hash"],
+        "phash": identity.get("phash", ""),
+    }
+
+
+def _cache_thumbnails_async(entries: list[tuple[dict, object]], *, cancel_event: Event | None, thumb_pool):
+    if not entries:
+        return
+
+    def cache_thumbs(loaded_entries):
+        for entry, img_matrix in loaded_entries:
+            if cancel_event and cancel_event.is_set():
+                break
+            try:
+                save_thumbnail_from_matrix(img_matrix, entry["hash"], 400)
+            except Exception:
+                pass
+
+    thumb_pool.submit(cache_thumbs, entries)
 
 
 def _iter_chunks_from_files(files: list[Path], chunk_size: int):
@@ -42,17 +101,13 @@ def scan_folder_files(
     video_fps: float | None = None,
     preload_workers_override: int | None = None,
 ):
-    settings = load_settings()
-    explicit_threshold = explicit_threshold if explicit_threshold is not None else settings.get("explicit_threshold", 0.6)
-    borderline_threshold = borderline_threshold if borderline_threshold is not None else settings.get("borderline_threshold", 0.4)
-    batch_size = batch_size if batch_size is not None else settings.get("batch_size", 8)
-    video_fps = video_fps if video_fps is not None else settings.get("video_fps", 1.0)
-    preload_workers = preload_workers_override if preload_workers_override is not None else settings.get("max_preload_workers", 4)
-    max_video_frames = settings.get("max_video_frames_per_file", 180)
-    max_video_size_mb = settings.get("max_video_size_mb", 500)
-    max_video_duration_seconds = settings.get("max_video_duration_seconds", 1800)
-    if not settings.get("gpu_enabled", True):
-        batch_size = 1
+    runtime = _resolve_scan_settings(
+        explicit_threshold=explicit_threshold,
+        borderline_threshold=borderline_threshold,
+        batch_size=batch_size,
+        video_fps=video_fps,
+        preload_workers_override=preload_workers_override,
+    )
 
     tracker = ProgressTracker(total=len(files), callback=progress_callback)
     status = "completed"
@@ -62,7 +117,7 @@ def scan_folder_files(
         with get_db() as conn:
             init_db(conn)
             sessions_repo = SessionsRepository(conn)
-            chunk_source = _iter_chunks_from_files(files, max(1, batch_size))
+            chunk_source = _iter_chunks_from_files(files, max(1, runtime["batch_size"]))
             for chunk in chunk_source:
                 if cancel_event and cancel_event.is_set():
                     status = "cancelled"
@@ -80,24 +135,13 @@ def scan_folder_files(
                     current_file = path.name
                     try:
                         existing = manifest.get(str(path))
-                        if existing and existing["status"] in ("quarantined", "vaulted", "deleted"):
-                            tracker.increment(current_file=current_file)
-                            continue
                         media_type = media_type_for_path(path)
                         identity = build_file_identity(path, existing, media_type=media_type)
-                        if existing and existing.get("fingerprint") == identity["fingerprint"]:
+                        if _is_held_or_unchanged(existing, identity):
                             tracker.increment(current_file=current_file)
                             continue
 
-                        entry = {
-                            "index": item["index"],
-                            "path": path,
-                            "media_type": media_type,
-                            "stat": identity["stat"],
-                            "fingerprint": identity["fingerprint"],
-                            "hash": identity["hash"],
-                            "phash": identity.get("phash", ""),
-                        }
+                        entry = _build_entry(item, identity, media_type)
                         if entry["media_type"] == "image":
                             image_entries.append(entry)
                         else:
@@ -105,8 +149,8 @@ def scan_folder_files(
                             evenly_distributed = should_skip_video(
                                 file_size_bytes=entry["stat"].st_size,
                                 duration_seconds=duration_seconds,
-                                max_size_mb=max_video_size_mb,
-                                max_duration_seconds=max_video_duration_seconds,
+                                max_size_mb=runtime["max_video_size_mb"],
+                                max_duration_seconds=runtime["max_video_duration_seconds"],
                             )
                             if evenly_distributed:
                                 logger.info(
@@ -114,15 +158,15 @@ def scan_folder_files(
                                     path,
                                     entry["stat"].st_size,
                                     duration_seconds,
-                                    max_video_frames,
+                                    runtime["max_video_frames"],
                                 )
                             video_result = scan_video_file(
                                 path,
-                                explicit_threshold=explicit_threshold,
-                                borderline_threshold=borderline_threshold,
-                                fps=video_fps,
-                                max_frames=max_video_frames,
-                                batch_size=batch_size,
+                                explicit_threshold=runtime["explicit_threshold"],
+                                borderline_threshold=runtime["borderline_threshold"],
+                                fps=runtime["video_fps"],
+                                max_frames=runtime["max_video_frames"],
+                                batch_size=runtime["batch_size"],
                                 evenly_distributed=evenly_distributed,
                                 cancel_event=cancel_event,
                             )
@@ -154,29 +198,19 @@ def scan_folder_files(
                 tracker.metrics.discovery_ms += now_ms() - stage_start
 
                 stage_start = now_ms()
-                loaded_images = load_images(image_entries, max_workers=preload_workers) if image_entries else []
+                loaded_images = load_images(image_entries, max_workers=runtime["preload_workers"]) if image_entries else []
                 tracker.metrics.load_ms += now_ms() - stage_start
                 if cancel_event and cancel_event.is_set():
                     status = "cancelled"
                     break
 
-                if loaded_images:
-                    def cache_thumbs(entries):
-                        for entry, img_matrix in entries:
-                            if cancel_event and cancel_event.is_set():
-                                break
-                            try:
-                                save_thumbnail_from_matrix(img_matrix, entry["hash"], 400)
-                            except Exception:
-                                pass
-
-                    thumb_pool.submit(cache_thumbs, loaded_images)
+                _cache_thumbnails_async(loaded_images, cancel_event=cancel_event, thumb_pool=thumb_pool)
 
                 stage_start = now_ms()
                 image_results = infer_image_batch(
                     loaded_images,
-                    explicit_threshold=explicit_threshold,
-                    borderline_threshold=borderline_threshold,
+                    explicit_threshold=runtime["explicit_threshold"],
+                    borderline_threshold=runtime["borderline_threshold"],
                 )
                 tracker.metrics.inference_ms += now_ms() - stage_start
                 if cancel_event and cancel_event.is_set():
@@ -250,8 +284,14 @@ def scan_folder(
     cancel_event: Event | None = None,
     scan_mode: str = "images",
 ):
-    settings = load_settings()
-    batch_size = max(1, settings.get("batch_size", 8))
+    runtime = _resolve_scan_settings(
+        explicit_threshold=None,
+        borderline_threshold=None,
+        batch_size=None,
+        video_fps=None,
+        preload_workers_override=None,
+    )
+    batch_size = max(1, runtime["batch_size"])
     tracker = ProgressTracker(total=0, callback=progress_callback)
     all_files: list[Path] = []
     for chunk in chunk_discovered_media(folder, batch_size * 4, scan_mode=scan_mode):
@@ -265,5 +305,5 @@ def scan_folder(
         progress_callback=progress_callback,
         cancel_event=cancel_event,
         batch_size=batch_size,
-        video_fps=settings.get("video_fps", 1.0),
+        video_fps=runtime["video_fps"],
     )

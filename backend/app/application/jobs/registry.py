@@ -36,6 +36,36 @@ def _format_eta(seconds: int | None) -> str:
     return f"{secs}s"
 
 
+def _build_progress_updater(job, cancel_event: Event):
+    def update_progress(index: int, total: int, flagged: int, current_file: str = ""):
+        eta = _eta_seconds(job.meta["started_at"], index, total)
+        eta_text = _format_eta(eta)
+        job.meta["current_file"] = f"{current_file} · ETA {eta_text}" if current_file and eta_text else current_file
+        job.meta["total"] = total
+        job.meta["flagged"] = flagged
+        job.meta["eta_seconds"] = eta
+        job.progress = int((index / total) * 100) if total else 100
+        if job.cancelled:
+            cancel_event.set()
+
+    return update_progress
+
+
+def _build_pc_discovery_updater(job):
+    def update_discovery(current: str, discovered: int, directories_visited: int = 0):
+        del directories_visited
+        job.meta.update(
+            {
+                "current_file": f"Discovering {Path(current).name or current} · {discovered} candidates found",
+                "total": discovered,
+                "flagged": 0,
+                "eta_seconds": None,
+            }
+        )
+
+    return update_discovery
+
+
 def ensure_jobs_registered():
     global _registered
     if _registered:
@@ -48,18 +78,7 @@ def ensure_jobs_registered():
         job.meta["cancel_event"] = cancel_event
         job.meta["scan_mode"] = scan_mode
         job.meta["started_at"] = now_ms()
-
-        def update_progress(index: int, total: int, flagged: int, current_file: str = ""):
-            eta = _eta_seconds(job.meta["started_at"], index, total)
-            eta_text = _format_eta(eta)
-            job.meta["current_file"] = f"{current_file} · ETA {eta_text}" if current_file and eta_text else current_file
-            job.meta["total"] = total
-            job.meta["flagged"] = flagged
-            job.meta["eta_seconds"] = eta
-            job.progress = int((index / total) * 100) if total else 100
-            if job.cancelled:
-                cancel_event.set()
-
+        update_progress = _build_progress_updater(job, cancel_event)
         result = scan_folder(
             target,
             session_id=job.payload["session_id"],
@@ -87,42 +106,24 @@ def ensure_jobs_registered():
                 scan_mode=scan_mode,
                 custom_skip_folders=settings.get("custom_skip_folders", []),
                 cancel_event=cancel_event,
-                progress_callback=lambda current, discovered, directories_visited=0: job.meta.update(
-                    {
-                        "current_file": f"Discovering {Path(current).name or current} · {discovered} candidates found",
-                        "total": discovered,
-                        "flagged": 0,
-                        "eta_seconds": None,
-                    }
-                ),
+                progress_callback=_build_pc_discovery_updater(job),
             )
         )
         if cancel_event.is_set():
             return {"total": 0, "flagged": 0, "status": "cancelled", "progress": 0}
         job.meta["total"] = len(files)
         job.meta["eta_seconds"] = None
-
-        def update_progress(index: int, total: int, flagged: int, current_file: str = ""):
-            eta = _eta_seconds(job.meta["started_at"], index, total)
-            eta_text = _format_eta(eta)
-            job.meta["current_file"] = f"{current_file} · ETA {eta_text}" if current_file and eta_text else current_file
-            job.meta["total"] = total
-            job.meta["flagged"] = flagged
-            job.meta["eta_seconds"] = eta
-            job.progress = int((index / total) * 100) if total else 100
-            if job.cancelled:
-                cancel_event.set()
-
+        update_progress = _build_progress_updater(job, cancel_event)
         result = scan_folder_files(
-                Path.home(),
-                files,
-                session_id=job.payload["session_id"],
-                progress_callback=update_progress,
-                cancel_event=cancel_event,
-                batch_size=safe_batch_size,
-                video_fps=safe_video_fps,
-                preload_workers_override=safe_preload_workers,
-            )
+            Path.home(),
+            files,
+            session_id=job.payload["session_id"],
+            progress_callback=update_progress,
+            cancel_event=cancel_event,
+            batch_size=safe_batch_size,
+            video_fps=safe_video_fps,
+            preload_workers_override=safe_preload_workers,
+        )
         return result
 
     job_queue.register("scan_folder", scan_folder_job)

@@ -1,9 +1,45 @@
 from pathlib import Path
 
+HELD_FILE_STATUSES = {"quarantined", "vaulted", "deleted"}
+
 
 class FilesRepository:
     def __init__(self, conn):
         self.conn = conn
+
+    @staticmethod
+    def _existing_file_record(row):
+        return {
+            "id": row[0],
+            "path": row[1],
+            "status": row[2],
+            "mtime": row[3],
+            "fingerprint": row[4],
+            "hash": row[5],
+            "folder": row[6],
+            "quarantined_at": row[7],
+            "type": row[8],
+            "frame_count": row[9],
+            "duration": row[10],
+            "phash": row[11],
+            "vaulted_at": row[12],
+        }
+
+    @staticmethod
+    def _file_record(row):
+        return {
+            "id": row[0],
+            "path": row[1],
+            "folder": row[2],
+            "status": row[3],
+            "quarantined_at": row[4],
+            "hash": row[5],
+            "type": row[6],
+            "frame_count": row[7],
+            "duration": row[8],
+            "phash": row[9],
+            "vaulted_at": row[10],
+        }
 
     def get_existing_by_paths(self, paths: list[str]):
         if not paths:
@@ -18,24 +54,7 @@ class FilesRepository:
             """,
             paths,
         ).fetchall()
-        return {
-            row[1]: {
-                "id": row[0],
-                "path": row[1],
-                "status": row[2],
-                "mtime": row[3],
-                "fingerprint": row[4],
-                "hash": row[5],
-                "folder": row[6],
-                "quarantined_at": row[7],
-                "type": row[8],
-                "frame_count": row[9],
-                "duration": row[10],
-                "phash": row[11],
-                "vaulted_at": row[12],
-            }
-            for row in rows
-        }
+        return {row[1]: self._existing_file_record(row) for row in rows}
 
     def get_by_id(self, file_id: int):
         row = self.conn.execute(
@@ -46,21 +65,7 @@ class FilesRepository:
             """,
             (file_id,),
         ).fetchone()
-        if row is None:
-            return None
-        return {
-            "id": row[0],
-            "path": row[1],
-            "folder": row[2],
-            "status": row[3],
-            "quarantined_at": row[4],
-            "hash": row[5],
-            "type": row[6],
-            "frame_count": row[7],
-            "duration": row[8],
-            "phash": row[9],
-            "vaulted_at": row[10],
-        }
+        return None if row is None else self._file_record(row)
 
     def upsert_many(self, records: list[dict]):
         self.conn.executemany(

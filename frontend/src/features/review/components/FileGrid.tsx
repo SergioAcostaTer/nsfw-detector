@@ -1,11 +1,22 @@
-import type { MouseEvent } from "react";
-import { useEffect, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Check, Film, Image as ImageIcon, Loader2 } from "lucide-react";
+import type { MouseEvent } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { thumbnailUrl, type ScanResult } from "@/api/client";
 import { Badge } from "@/components/ui";
 import { filenameFromPath, formatPercent } from "@/shared/lib/format";
+
+type FileCardProps = {
+  item: ScanResult;
+  isSelected: boolean;
+  isRescued: boolean;
+  isFocused: boolean;
+  isPending: boolean;
+  blurEnabled?: boolean;
+  onClick: (e: MouseEvent) => void;
+  onDoubleClick: () => void;
+};
 
 export function FileCard({
   item,
@@ -14,28 +25,9 @@ export function FileCard({
   isFocused,
   isPending,
   blurEnabled = true,
-  safeMode = false,
   onClick,
   onDoubleClick,
-  onRescue,
-  onQuarantine,
-  onVault,
-  onDelete,
-}: {
-  item: ScanResult;
-  isSelected: boolean;
-  isRescued: boolean;
-  isFocused: boolean;
-  isPending: boolean;
-  blurEnabled?: boolean;
-  safeMode?: boolean;
-  onClick: (e: MouseEvent) => void;
-  onDoubleClick: () => void;
-  onRescue: () => void;
-  onQuarantine: () => void;
-  onVault: () => void;
-  onDelete: () => void;
-}) {
+}: FileCardProps) {
   const Icon = item.type === "video" ? Film : ImageIcon;
   const [imgLoaded, setImgLoaded] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
@@ -112,25 +104,7 @@ export function FileCard({
   );
 }
 
-export function FileGrid({
-  items,
-  selectedIds,
-  rescuedIds,
-  focusedId,
-  pendingIds,
-  gridCols,
-  blurEnabled = true,
-  safeMode = false,
-  hasNextPage,
-  fetchNextPage,
-  isFetchingNextPage,
-  onItemClick,
-  onItemDoubleClick,
-  onRescue,
-  onQuarantine,
-  onVault,
-  onDelete,
-}: {
+type FileGridProps = {
   items: ScanResult[];
   selectedIds: Set<number>;
   rescuedIds: Set<number>;
@@ -148,7 +122,24 @@ export function FileGrid({
   onQuarantine: (item: ScanResult) => void;
   onVault: (item: ScanResult) => void;
   onDelete: (item: ScanResult) => void;
-}) {
+};
+
+export function FileGrid(props: FileGridProps) {
+  const {
+    items,
+    selectedIds,
+    rescuedIds,
+    focusedId,
+    pendingIds,
+    gridCols,
+    blurEnabled = true,
+    hasNextPage,
+    fetchNextPage,
+    isFetchingNextPage,
+    onItemClick,
+    onItemDoubleClick,
+  } = props;
+
   const rowCount = Math.ceil(items.length / gridCols);
   const parentRef = useRef<HTMLDivElement>(null);
 
@@ -175,59 +166,54 @@ export function FileGrid({
   return (
     <div ref={parentRef} className="h-full overflow-y-auto">
       <div className="w-full px-4 py-4">
-      <div style={{ height: `${virtualizer.getTotalSize()}px`, width: "100%", position: "relative" }}>
-        {virtualItems.map((virtualRow) => {
-          const isLoaderRow = virtualRow.index > rowCount - 1;
-          const rowStartIndex = virtualRow.index * gridCols;
-          const rowItems = items.slice(rowStartIndex, rowStartIndex + gridCols);
+        <div style={{ height: `${virtualizer.getTotalSize()}px`, width: "100%", position: "relative" }}>
+          {virtualItems.map((virtualRow) => {
+            const isLoaderRow = virtualRow.index > rowCount - 1;
+            const rowStartIndex = virtualRow.index * gridCols;
+            const rowItems = items.slice(rowStartIndex, rowStartIndex + gridCols);
 
-          return (
-            <div
-              key={virtualRow.index}
-              style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                width: "100%",
-                height: `${virtualRow.size}px`,
-                transform: `translateY(${virtualRow.start}px)`,
-                display: "grid",
-                gridTemplateColumns: `repeat(${gridCols}, minmax(0, 1fr))`,
-                gap: "1rem",
-                paddingBottom: "1rem",
-              }}
-            >
-              {isLoaderRow ? (
-                <div className="col-span-full flex justify-center py-12 text-[var(--ink-2)]">
-                  <Loader2 size={24} className="animate-spin" />
-                </div>
-              ) : (
-                rowItems.map((item, localIndex) => {
-                  const absoluteIndex = rowStartIndex + localIndex;
-                  return (
-                    <FileCard
-                      key={item.id}
-                      item={item}
-                      safeMode={safeMode}
-                      isSelected={selectedIds.has(item.id)}
-                      isRescued={rescuedIds.has(item.id)}
-                      isFocused={focusedId === item.id}
-                      isPending={pendingIds.has(item.id)}
-                      blurEnabled={blurEnabled}
-                      onClick={(e) => onItemClick(e, item.id, absoluteIndex)}
-                      onDoubleClick={() => onItemDoubleClick(item)}
-                      onRescue={() => onRescue(item)}
-                      onQuarantine={() => onQuarantine(item)}
-                      onVault={() => onVault(item)}
-                      onDelete={() => onDelete(item)}
-                    />
-                  );
-                })
-              )}
-            </div>
-          );
-        })}
-      </div>
+            return (
+              <div
+                key={virtualRow.index}
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  width: "100%",
+                  height: `${virtualRow.size}px`,
+                  transform: `translateY(${virtualRow.start}px)`,
+                  display: "grid",
+                  gridTemplateColumns: `repeat(${gridCols}, minmax(0, 1fr))`,
+                  gap: "1rem",
+                  paddingBottom: "1rem",
+                }}
+              >
+                {isLoaderRow ? (
+                  <div className="col-span-full flex justify-center py-12 text-[var(--ink-2)]">
+                    <Loader2 size={24} className="animate-spin" />
+                  </div>
+                ) : (
+                  rowItems.map((item, localIndex) => {
+                    const absoluteIndex = rowStartIndex + localIndex;
+                    return (
+                      <FileCard
+                        key={item.id}
+                        item={item}
+                        isSelected={selectedIds.has(item.id)}
+                        isRescued={rescuedIds.has(item.id)}
+                        isFocused={focusedId === item.id}
+                        isPending={pendingIds.has(item.id)}
+                        blurEnabled={blurEnabled}
+                        onClick={(e) => onItemClick(e, item.id, absoluteIndex)}
+                        onDoubleClick={() => onItemDoubleClick(item)}
+                      />
+                    );
+                  })
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

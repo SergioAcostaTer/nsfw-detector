@@ -13,12 +13,7 @@ from app.api.routes import (
     storage_router,
 )
 from app.application.jobs.registry import ensure_jobs_registered, recover_running_sessions
-from app.config import TRASH_DIR, VAULT_DIR
-from app.db.migrate import run_migrations
-from app.db.models import init_db
-from app.db.session import get_db
-from app.jobs.auto_delete import run_auto_delete
-from app.settings import load_settings
+from app.bootstrap import build_scheduler, prepare_runtime
 
 
 def create_app():
@@ -44,17 +39,11 @@ def create_app():
     @app.on_event("startup")
     def on_startup():
         nonlocal scheduler
-        TRASH_DIR.mkdir(parents=True, exist_ok=True)
-        VAULT_DIR.mkdir(parents=True, exist_ok=True)
-        with get_db() as conn:
-            init_db(conn)
-            run_migrations(conn)
-            conn.commit()
+        prepare_runtime()
         ensure_jobs_registered()
         recover_running_sessions()
         if scheduler is None:
-            scheduler = BackgroundScheduler()
-            scheduler.add_job(lambda: run_auto_delete(load_settings().get("auto_delete_days", 30)), "interval", hours=24)
+            scheduler = build_scheduler()
             scheduler.start()
 
     @app.on_event("shutdown")
