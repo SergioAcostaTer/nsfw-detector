@@ -223,8 +223,9 @@ Development/support reset.
 Behavior:
 
 - clears queue state
-- deletes SQLite files
-- recreates schema
+- clears SQLite rows without deleting the database file
+- clears runtime trash, vault, and thumbnail-cache contents
+- preserves repository placeholder files such as `.gitkeep`
 
 ## Contract Notes
 

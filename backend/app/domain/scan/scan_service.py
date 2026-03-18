@@ -46,10 +46,10 @@ def _resolve_scan_settings(
     return resolved
 
 
-def _is_held_or_unchanged(existing: dict | None, identity: dict) -> bool:
+def _is_held(existing: dict | None) -> bool:
     if existing and existing["status"] in HELD_FILE_STATUSES:
         return True
-    return bool(existing and existing.get("fingerprint") == identity["fingerprint"])
+    return False
 
 
 def _build_entry(item: dict, identity: dict, media_type: str) -> dict:
@@ -137,7 +137,7 @@ def scan_folder_files(
                         existing = manifest.get(str(path))
                         media_type = media_type_for_path(path)
                         identity = build_file_identity(path, existing, media_type=media_type)
-                        if _is_held_or_unchanged(existing, identity):
+                        if _is_held(existing):
                             tracker.increment(current_file=current_file)
                             continue
 

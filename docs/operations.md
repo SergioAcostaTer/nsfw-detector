@@ -144,8 +144,9 @@ Check:
 The admin reset path:
 
 - clears queue state
-- removes SQLite files
-- recreates the schema
+- clears SQLite rows without deleting the database file
+- clears runtime trash, vault, and thumbnail-cache contents
+- preserves repository placeholder files such as `.gitkeep`
 
 Use it for support/debugging, not as a routine operator flow.
 
