@@ -1,4 +1,4 @@
-import { LayoutGrid, Rows3, ArrowDownWideNarrow, Download } from "lucide-react";
+import { LayoutGrid, Rows3, ArrowDownWideNarrow, Download, Eye, EyeOff } from "lucide-react";
 
 import { exportCsvUrl } from "@/api/client";
 import { FilterBar } from "@/components/review/FilterBar";
@@ -8,6 +8,8 @@ export function ReviewToolbar({
   onFilterChange,
   sortBy,
   onSortChange,
+  blurEnabled,
+  onBlurToggle,
   counts,
   view,
   onViewChange,
@@ -16,6 +18,8 @@ export function ReviewToolbar({
   onFilterChange: (value: string) => void;
   sortBy: string;
   onSortChange: (value: string) => void;
+  blurEnabled: boolean;
+  onBlurToggle: () => void;
   counts: Record<string, number>;
   view: "grid" | "list";
   onViewChange: (value: "grid" | "list") => void;
@@ -47,6 +51,13 @@ export function ReviewToolbar({
         <div className="h-5 w-px bg-[var(--line-strong)] opacity-50" />
 
         <div className="flex items-center gap-1">
+          <button
+            onClick={onBlurToggle}
+            title={blurEnabled ? "Disable blur" : "Enable blur"}
+            className={`rounded-full p-2 transition ${blurEnabled ? "bg-[var(--amber-dim)] text-[var(--amber)]" : "text-[var(--ink-2)] hover:bg-[var(--bg-2)]"}`}
+          >
+            {blurEnabled ? <EyeOff size={18} /> : <Eye size={18} />}
+          </button>
           <a
             href={exportCsvUrl({ status: "active", decision: filter === "all" ? undefined : filter })}
             title="Export CSV"

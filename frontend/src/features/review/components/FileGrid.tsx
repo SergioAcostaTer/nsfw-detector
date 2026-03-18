@@ -1,6 +1,6 @@
 import type { MouseEvent } from "react";
 import { useEffect, useRef, useState } from "react";
-import { useWindowVirtualizer } from "@tanstack/react-virtual";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { Check, Film, Image as ImageIcon, Loader2 } from "lucide-react";
 
 import { thumbnailUrl, type ScanResult } from "@/api/client";
@@ -13,6 +13,7 @@ export function FileCard({
   isRescued,
   isFocused,
   isPending,
+  blurEnabled = true,
   safeMode = false,
   onClick,
   onDoubleClick,
@@ -25,6 +26,7 @@ export function FileCard({
   isRescued: boolean;
   isFocused: boolean;
   isPending: boolean;
+  blurEnabled?: boolean;
   safeMode?: boolean;
   onClick: (e: MouseEvent) => void;
   onDoubleClick: () => void;
@@ -83,7 +85,7 @@ export function FileCard({
             loading="lazy"
             onLoad={() => setImgLoaded(true)}
             className={`h-full w-full object-cover transition-all duration-500 ${
-              isRescued ? "blur-none" : "blur-xl group-hover:blur-none"
+              isRescued || !blurEnabled ? "blur-none" : "blur-xl group-hover:blur-none"
             } ${imgLoaded ? "opacity-100" : "opacity-0"}`}
             draggable={false}
           />
@@ -115,6 +117,7 @@ export function FileGrid({
   focusedId,
   pendingIds,
   gridCols,
+  blurEnabled = true,
   safeMode = false,
   hasNextPage,
   fetchNextPage,
@@ -131,6 +134,7 @@ export function FileGrid({
   focusedId: number | null;
   pendingIds: Set<number>;
   gridCols: number;
+  blurEnabled?: boolean;
   safeMode?: boolean;
   hasNextPage: boolean;
   fetchNextPage: () => void;
@@ -142,9 +146,11 @@ export function FileGrid({
   onDelete: (item: ScanResult) => void;
 }) {
   const rowCount = Math.ceil(items.length / gridCols);
+  const parentRef = useRef<HTMLDivElement>(null);
 
-  const virtualizer = useWindowVirtualizer({
+  const virtualizer = useVirtualizer({
     count: hasNextPage ? rowCount + 1 : rowCount,
+    getScrollElement: () => parentRef.current,
     estimateSize: () => 280,
     overscan: 3,
   });
@@ -163,7 +169,8 @@ export function FileGrid({
   }, [fetchNextPage, hasNextPage, isFetchingNextPage, rowCount, virtualItems]);
 
   return (
-    <div className="w-full px-4 py-4">
+    <div ref={parentRef} className="h-full overflow-y-auto">
+      <div className="w-full px-4 py-4">
       <div style={{ height: `${virtualizer.getTotalSize()}px`, width: "100%", position: "relative" }}>
         {virtualItems.map((virtualRow) => {
           const isLoaderRow = virtualRow.index > rowCount - 1;
@@ -202,6 +209,7 @@ export function FileGrid({
                       isRescued={rescuedIds.has(item.id)}
                       isFocused={focusedId === item.id}
                       isPending={pendingIds.has(item.id)}
+                      blurEnabled={blurEnabled}
                       onClick={(e) => onItemClick(e, item.id, absoluteIndex)}
                       onDoubleClick={() => onItemDoubleClick(item)}
                       onRescue={() => onRescue(item)}
@@ -214,6 +222,7 @@ export function FileGrid({
             </div>
           );
         })}
+      </div>
       </div>
     </div>
   );

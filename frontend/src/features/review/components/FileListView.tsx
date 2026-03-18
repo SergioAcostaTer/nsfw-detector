@@ -10,6 +10,7 @@ export function FileListView({
   selectedIds,
   rescuedIds,
   pendingIds,
+  blurEnabled = true,
   safeMode = false,
   onItemClick,
   onRescue,
@@ -20,6 +21,7 @@ export function FileListView({
   selectedIds: Set<number>;
   rescuedIds: Set<number>;
   pendingIds: Set<number>;
+  blurEnabled?: boolean;
   safeMode?: boolean;
   onItemClick: (event: MouseEvent, id: number, index: number) => void;
   onRescue: (item: ScanResult) => void;
@@ -55,7 +57,7 @@ export function FileListView({
               src={thumbnailUrl(item.path, 96)}
               alt=""
               className="h-14 w-14 rounded-md object-cover"
-              style={{ filter: rescuedIds.has(item.id) ? "none" : "blur(6px)" }}
+              style={{ filter: rescuedIds.has(item.id) || !blurEnabled ? "none" : "blur(6px)" }}
             />
             <div className="min-w-0">
               <p className="truncate text-sm font-medium text-[var(--text-primary)]" title={filenameFromPath(item.path)}>

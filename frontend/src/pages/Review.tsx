@@ -64,6 +64,7 @@ export function Review() {
   const [view, setView] = useState<"grid" | "list">(() => (localStorage.getItem("nsfw-review-view") === "list" ? "list" : "grid"));
   const [gridCols, setGridCols] = useState<number>(() => Number(localStorage.getItem("nsfw-grid-cols") ?? 4));
   const [sortBy, setSortBy] = useState<string>("score_desc");
+  const [blurEnabled, setBlurEnabled] = useState<boolean>(() => localStorage.getItem("nsfw-preview-blur") !== "off");
   const [completedFolders, setCompletedFolders] = useState<Set<string>>(new Set());
   const [pendingDeleteIds, setPendingDeleteIds] = useState<number[]>([]);
   const [pendingIds, setPendingIds] = useState<Set<number>>(new Set());
@@ -79,6 +80,10 @@ export function Review() {
   useEffect(() => {
     localStorage.setItem("nsfw-grid-cols", String(gridCols));
   }, [gridCols]);
+
+  useEffect(() => {
+    localStorage.setItem("nsfw-preview-blur", blurEnabled ? "on" : "off");
+  }, [blurEnabled]);
 
   useEffect(() => {
     const queryFilter = searchParams.get("decision");
@@ -523,6 +528,8 @@ export function Review() {
             }}
             sortBy={sortBy}
             onSortChange={setSortBy}
+            blurEnabled={blurEnabled}
+            onBlurToggle={() => setBlurEnabled((current) => !current)}
             counts={flaggedResults.counts.data ?? {}}
             view={view}
             onViewChange={setView}
@@ -564,7 +571,7 @@ export function Review() {
           }}
         />
 
-        <div className="flex-1">
+        <div className="flex-1 overflow-y-auto">
           {itemsQuery.isLoading ? (
             <SkeletonGrid cols={gridCols} />
           ) : folderSummaries.length === 0 ? (
@@ -587,6 +594,7 @@ export function Review() {
               focusedId={lastFocusedId}
               pendingIds={pendingIds}
               gridCols={gridCols}
+              blurEnabled={blurEnabled}
               safeMode={safeMode}
               hasNextPage={Boolean(itemsQuery.hasNextPage)}
               fetchNextPage={() => void itemsQuery.fetchNextPage()}
@@ -619,6 +627,7 @@ export function Review() {
               selectedIds={selectedSet}
               rescuedIds={rescuedIds}
               pendingIds={pendingIds}
+              blurEnabled={blurEnabled}
               safeMode={safeMode}
               onItemClick={handleItemClick}
               onRescue={(item) => (safeMode ? unrescueMutation.mutate([item.id]) : rescueMutation.mutate([item.id]))}
