@@ -13,6 +13,7 @@ type AppState = {
   selectedIds: number[];
   lastFocusedId: number | null;
   undoStack: UndoAction[];
+  sidebarCollapsed: boolean;
 };
 
 const STORAGE_KEY = "nsfw-scanner-app-store";
@@ -25,6 +26,7 @@ function loadState(): AppState {
       selectedIds: [],
       lastFocusedId: null,
       undoStack: [],
+      sidebarCollapsed: false,
     };
   }
   try {
@@ -36,6 +38,7 @@ function loadState(): AppState {
         selectedIds: [],
         lastFocusedId: null,
         undoStack: [],
+        sidebarCollapsed: false,
       };
     }
     const parsed = JSON.parse(raw) as Partial<AppState>;
@@ -45,6 +48,7 @@ function loadState(): AppState {
       selectedIds: parsed.selectedIds ?? [],
       lastFocusedId: parsed.lastFocusedId ?? null,
       undoStack: parsed.undoStack ?? [],
+      sidebarCollapsed: parsed.sidebarCollapsed ?? false,
     };
   } catch {
     return {
@@ -53,6 +57,7 @@ function loadState(): AppState {
       selectedIds: [],
       lastFocusedId: null,
       undoStack: [],
+      sidebarCollapsed: false,
     };
   }
 }
@@ -74,7 +79,8 @@ function setState(partial: Partial<AppState>) {
     next.activeFilter === state.activeFilter &&
     next.lastFocusedId === state.lastFocusedId &&
     next.selectedIds === state.selectedIds &&
-    next.undoStack === state.undoStack
+    next.undoStack === state.undoStack &&
+    next.sidebarCollapsed === state.sidebarCollapsed
   ) {
     return;
   }
@@ -122,6 +128,9 @@ export const appStore = {
   },
   clearUndo() {
     setState({ undoStack: [] });
+  },
+  setSidebarCollapsed(sidebarCollapsed: boolean) {
+    setState({ sidebarCollapsed });
   },
 };
 

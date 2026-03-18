@@ -19,9 +19,9 @@ const DEFAULT_SETTINGS: AppSettings = {
   max_preload_workers: 4,
   max_scan_workers: 4,
   image_max_dimension: 640,
-  max_video_frames_per_file: 180,
-  max_video_size_mb: 500,
-  max_video_duration_seconds: 1800,
+  max_video_frames_per_file: 48,
+  max_video_size_mb: 200,
+  max_video_duration_seconds: 900,
 };
 
 function Section({ title, description, children }: { title: string; description: string; children: ReactNode }) {
@@ -220,7 +220,7 @@ export function Settings() {
         />
       </Section>
 
-      <Section title="Video Processing" description="Control frame sampling for supported video scans.">
+      <Section title="Video Processing" description="Large videos are sampled with evenly distributed screenshots instead of dense frame reads.">
         <div className="flex flex-wrap gap-4">
           <label className="text-sm">
             Frames per second
@@ -241,31 +241,31 @@ export function Settings() {
               type="number"
               min={1}
               max={10000}
-              value={localSettings.max_video_frames_per_file ?? 180}
+              value={localSettings.max_video_frames_per_file ?? 48}
               onChange={(event) => updateField("max_video_frames_per_file", Math.max(1, Number(event.target.value) || 1))}
               className="ml-2 w-24 rounded-xl border px-3 py-2"
               style={{ background: "var(--bg-2)", borderColor: "var(--line)" }}
             />
           </label>
           <label className="text-sm">
-            Skip if size over MB
+            Sparse sample over MB
             <input
               type="number"
               min={0}
               max={50000}
-              value={localSettings.max_video_size_mb ?? 500}
+              value={localSettings.max_video_size_mb ?? 200}
               onChange={(event) => updateField("max_video_size_mb", Math.max(0, Number(event.target.value) || 0))}
               className="ml-2 w-24 rounded-xl border px-3 py-2"
               style={{ background: "var(--bg-2)", borderColor: "var(--line)" }}
             />
           </label>
           <label className="text-sm">
-            Skip if duration over sec
+            Sparse sample over sec
             <input
               type="number"
               min={0}
               max={86400}
-              value={localSettings.max_video_duration_seconds ?? 1800}
+              value={localSettings.max_video_duration_seconds ?? 900}
               onChange={(event) => updateField("max_video_duration_seconds", Math.max(0, Number(event.target.value) || 0))}
               className="ml-2 w-28 rounded-xl border px-3 py-2"
               style={{ background: "var(--bg-2)", borderColor: "var(--line)" }}

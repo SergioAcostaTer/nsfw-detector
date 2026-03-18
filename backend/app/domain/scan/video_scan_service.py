@@ -22,6 +22,7 @@ def scan_video_file(
     fps: float,
     max_frames: int,
     batch_size: int,
+    evenly_distributed: bool = False,
 ):
     detector = get_detector()
     frame_scores = []
@@ -29,7 +30,7 @@ def scan_video_file(
     classes = set()
     frame_count = 0
 
-    frames_iter = sample_video_frames(path, fps=fps, max_frames=max_frames)
+    frames_iter = sample_video_frames(path, fps=fps, max_frames=max_frames, evenly_distributed=evenly_distributed)
     for chunk in _chunked(frames_iter, max(1, batch_size)):
         detections_batch = detector.detect_batch(chunk)
         for detections in detections_batch:

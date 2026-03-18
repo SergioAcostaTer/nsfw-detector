@@ -95,20 +95,20 @@ def scan_folder_files(
                         image_entries.append(entry)
                     else:
                         duration_seconds = read_video_duration(path)
-                        if should_skip_video(
+                        evenly_distributed = should_skip_video(
                             file_size_bytes=entry["stat"].st_size,
                             duration_seconds=duration_seconds,
                             max_size_mb=max_video_size_mb,
                             max_duration_seconds=max_video_duration_seconds,
-                        ):
+                        )
+                        if evenly_distributed:
                             logger.info(
-                                "scan_skip_big_video path=%s size_bytes=%s duration_seconds=%.2f",
+                                "scan_sparse_big_video path=%s size_bytes=%s duration_seconds=%.2f max_frames=%s",
                                 path,
                                 entry["stat"].st_size,
                                 duration_seconds,
+                                max_video_frames,
                             )
-                            tracker.increment(current_file=current_file)
-                            continue
                         video_result = scan_video_file(
                             path,
                             explicit_threshold=explicit_threshold,
@@ -116,6 +116,7 @@ def scan_folder_files(
                             fps=video_fps,
                             max_frames=max_video_frames,
                             batch_size=batch_size,
+                            evenly_distributed=evenly_distributed,
                         )
                         persisted_records.append(
                             {

@@ -77,8 +77,8 @@ function TreeItem({
   return (
     <div className="select-none">
       <div
-        className={`group flex cursor-pointer items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm transition-colors ${
-          isSelected ? "bg-blue-500/10 text-blue-600 dark:text-blue-400" : "text-[var(--ink-1)] hover:bg-[var(--bg-2)]"
+        className={`group flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1 text-sm transition-colors ${
+          isSelected ? "bg-[var(--bg-2)] text-[var(--blue)]" : "text-[var(--ink-1)] hover:bg-[var(--bg-2)]"
         }`}
         style={{ paddingLeft: `${level * 16 + 8}px` }}
         onClick={(e) => {
@@ -101,9 +101,9 @@ function TreeItem({
         </button>
 
         {expanded && hasChildren ? (
-          <FolderOpen size={16} className={isSelected ? "text-blue-500" : "text-gray-400"} fill="currentColor" fillOpacity={0.2} />
+          <FolderOpen size={16} className={isSelected ? "text-[var(--blue)]" : "text-[var(--ink-3)]"} />
         ) : (
-          <Folder size={16} className={isSelected ? "text-blue-500" : "text-gray-400"} fill="currentColor" fillOpacity={0.2} />
+          <Folder size={16} className={isSelected ? "text-[var(--blue)]" : "text-[var(--ink-3)]"} />
         )}
 
         <span className="flex-1 truncate font-medium">{node.name}</span>
@@ -111,8 +111,9 @@ function TreeItem({
         {node.flagged > 0 ? (
           <span
             className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${
-              node.triaged ? "bg-green-500/10 text-green-500" : "bg-red-500/10 text-red-500"
+              node.triaged ? "text-[var(--ink-3)]" : "text-[var(--ink-3)]"
             }`}
+            style={{ background: "transparent" }}
           >
             {node.flagged}
           </span>

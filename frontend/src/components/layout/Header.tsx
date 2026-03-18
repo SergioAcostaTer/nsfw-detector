@@ -9,7 +9,8 @@ import { Badge, Kbd, ProgressBar } from "@/components/ui";
 import { filenameFromPath } from "@/shared/lib/format";
 import { queryKeys } from "@/shared/lib/queryKeys";
 
-export function Header() {
+export function Header({ collapsed = false }: { collapsed?: boolean }) {
+  const normalizePath = (path: string) => path.replace(/\\/g, "/");
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
@@ -51,8 +52,8 @@ export function Header() {
 
   return (
     <header
-      className="fixed left-[240px] right-0 top-0 z-30 flex h-12 items-center justify-between border-b px-6 backdrop-blur"
-      style={{ background: "color-mix(in srgb, var(--surface-base) 78%, transparent)", borderColor: "var(--line)" }}
+      className="fixed right-0 top-0 z-30 flex h-12 items-center justify-between border-b px-6 backdrop-blur transition-[left] duration-200"
+      style={{ left: collapsed ? "76px" : "240px", background: "color-mix(in srgb, var(--surface-base) 78%, transparent)", borderColor: "var(--line)" }}
     >
       <div className="min-w-[180px]">
         <p className="text-[10px] uppercase tracking-[0.24em]" style={{ color: "var(--ink-3)" }}>
@@ -143,4 +144,3 @@ export function Header() {
     </header>
   );
 }
-  const normalizePath = (path: string) => path.replace(/\\/g, "/");

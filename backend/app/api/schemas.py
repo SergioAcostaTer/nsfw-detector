@@ -23,9 +23,9 @@ class SettingsRequest(BaseModel):
     max_preload_workers: int = 4
     max_scan_workers: int = 4
     image_max_dimension: int = 640
-    max_video_frames_per_file: int = 180
-    max_video_size_mb: int = 500
-    max_video_duration_seconds: int = 1800
+    max_video_frames_per_file: int = 48
+    max_video_size_mb: int = 200
+    max_video_duration_seconds: int = 900
 
 
 class ScanStatusResponse(BaseModel):

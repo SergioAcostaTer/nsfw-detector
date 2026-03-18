@@ -16,9 +16,9 @@ DEFAULT_SETTINGS = {
     "max_preload_workers": 4,
     "max_scan_workers": 4,
     "image_max_dimension": 640,
-    "max_video_frames_per_file": 180,
-    "max_video_size_mb": 500,
-    "max_video_duration_seconds": 1800,
+    "max_video_frames_per_file": 48,
+    "max_video_size_mb": 200,
+    "max_video_duration_seconds": 900,
 }
 
 
