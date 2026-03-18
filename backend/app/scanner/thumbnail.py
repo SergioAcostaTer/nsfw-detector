@@ -37,3 +37,17 @@ def make_thumbnail(path: Path, max_size: int = 400, cache_key: str | None = None
         cache.set(cache_key, max_size, data)
 
     return data
+
+
+def save_thumbnail_from_matrix(image_matrix, cache_key: str, max_size: int = 400):
+    cache = ThumbnailCache()
+    if cache.path_for(cache_key, max_size).exists():
+        return
+
+    rgb_image = cv2.cvtColor(image_matrix, cv2.COLOR_BGR2RGB)
+    img = Image.fromarray(rgb_image)
+    img.thumbnail((max_size, max_size))
+
+    buffer = BytesIO()
+    img.save(buffer, format="WEBP", quality=80)
+    cache.set(cache_key, max_size, buffer.getvalue())

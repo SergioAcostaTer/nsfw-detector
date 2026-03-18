@@ -51,6 +51,7 @@ export interface ScanStatus {
   current_file: string;
   job_id?: string | null;
   status?: string;
+  eta_seconds?: number | null;
 }
 
 export interface ScanSession {

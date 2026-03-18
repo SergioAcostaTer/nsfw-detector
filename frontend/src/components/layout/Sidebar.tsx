@@ -5,6 +5,7 @@ import { NavLink } from "react-router-dom";
 import { appStore } from "@/app/store";
 import { getResultsCount, getScanStatus, getStats } from "@/api/client";
 import { ProgressBar } from "@/components/ui";
+import { filenameFromPath, formatEtaSeconds } from "@/shared/lib/format";
 import { queryKeys } from "@/shared/lib/queryKeys";
 
 const sections = [
@@ -41,6 +42,12 @@ export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
   });
 
   const reviewCount = (counts?.explicit ?? 0) + (counts?.borderline ?? 0);
+  const processed = scanStatus?.total ? Math.min(scanStatus.total, Math.round((scanStatus.progress / 100) * scanStatus.total)) : 0;
+  const liveActivity = scanStatus?.current_file
+    ? scanStatus.current_file.includes("Discovering")
+      ? scanStatus.current_file
+      : filenameFromPath(scanStatus.current_file)
+    : "";
 
   return (
     <aside
@@ -137,9 +144,17 @@ export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
           </div>
           <ProgressBar value={scanStatus.progress} />
           {!collapsed ? (
-            <p>
-              {scanStatus.flagged} flagged · {scanStatus.total ? Math.round((scanStatus.progress / 100) * scanStatus.total) : 0}/{scanStatus.total}
-            </p>
+            <div className="space-y-1.5">
+              <p>
+                {scanStatus.flagged} flagged · {processed}/{scanStatus.total}
+              </p>
+              <p>ETA {formatEtaSeconds(scanStatus.eta_seconds)}</p>
+              {liveActivity ? (
+                <p className="truncate" style={{ color: "var(--ink-3)" }}>
+                  {liveActivity}
+                </p>
+              ) : null}
+            </div>
           ) : null}
         </div>
       ) : (

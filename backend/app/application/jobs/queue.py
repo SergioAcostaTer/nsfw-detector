@@ -68,6 +68,9 @@ class JobQueue:
             job = self.runtime.get(job_key)
             if job is not None:
                 job.cancelled = True
+                cancel_event = job.meta.get("cancel_event")
+                if cancel_event is not None:
+                    cancel_event.set()
         try:
             with get_db() as conn:
                 session = SessionsRepository(conn).get_by_id(int(job_key))

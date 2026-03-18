@@ -7,7 +7,7 @@ import { getResults, thumbnailUrl } from "@/api/client";
 import { appStore } from "@/app/store";
 import { Badge, Kbd, ProgressBar } from "@/components/ui";
 import { useScanStatus } from "@/hooks/useScanStatus";
-import { filenameFromPath } from "@/shared/lib/format";
+import { filenameFromPath, formatEtaSeconds } from "@/shared/lib/format";
 import { queryKeys } from "@/shared/lib/queryKeys";
 
 export function Header({ collapsed = false }: { collapsed?: boolean }) {
@@ -46,6 +46,12 @@ export function Header({ collapsed = false }: { collapsed?: boolean }) {
   const results = useMemo(() => {
     return searchable?.items ?? [];
   }, [searchable?.items]);
+  const processed = status?.total ? Math.min(status.total, Math.round((status.progress / 100) * status.total)) : 0;
+  const liveActivity = status?.current_file
+    ? status.current_file.includes("Discovering")
+      ? status.current_file
+      : filenameFromPath(status.current_file)
+    : "";
 
   return (
     <header
@@ -124,12 +130,15 @@ export function Header({ collapsed = false }: { collapsed?: boolean }) {
 
       <div className="min-w-[180px]">
         {status?.running ? (
-          <div className="space-y-1">
+          <div className="space-y-1.5">
             <div className="flex items-center justify-end gap-2 text-xs text-[var(--ink-2)]">
               <span className="h-2 w-2 rounded-full bg-[var(--accent-primary)]" />
-              <span>Scanning {status.progress}%</span>
+              <span>{status.progress}% · {processed}/{status.total || 0} · ETA {formatEtaSeconds(status.eta_seconds)}</span>
             </div>
             <ProgressBar value={status.progress} />
+            <p className="max-w-[280px] truncate text-right text-[11px]" style={{ color: "var(--ink-3)" }}>
+              {liveActivity || `${status.flagged} flagged`}
+            </p>
           </div>
         ) : (
           <div className="flex items-center justify-end gap-2 text-xs" style={{ color: "var(--ink-2)" }}>

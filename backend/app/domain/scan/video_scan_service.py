@@ -1,5 +1,6 @@
 from itertools import islice
 from pathlib import Path
+from threading import Event
 
 from app.domain.scan.decision import decide
 from app.infrastructure.video.frame_sampler import read_video_duration, sample_video_frames
@@ -23,6 +24,7 @@ def scan_video_file(
     max_frames: int,
     batch_size: int,
     evenly_distributed: bool = False,
+    cancel_event: Event | None = None,
 ):
     detector = get_detector()
     frame_scores = []
@@ -30,10 +32,20 @@ def scan_video_file(
     classes = set()
     frame_count = 0
 
-    frames_iter = sample_video_frames(path, fps=fps, max_frames=max_frames, evenly_distributed=evenly_distributed)
+    frames_iter = sample_video_frames(
+        path,
+        fps=fps,
+        max_frames=max_frames,
+        evenly_distributed=evenly_distributed,
+        cancel_event=cancel_event,
+    )
     for chunk in _chunked(frames_iter, max(1, batch_size)):
+        if cancel_event and cancel_event.is_set():
+            break
         detections_batch = detector.detect_batch(chunk)
         for detections in detections_batch:
+            if cancel_event and cancel_event.is_set():
+                break
             decision_value, score = decide(
                 detections,
                 explicit_threshold=explicit_threshold,
@@ -44,6 +56,8 @@ def scan_video_file(
                 explicit_hits += 1
             classes.update(item["class"] for item in detections)
             frame_count += 1
+        if cancel_event and cancel_event.is_set():
+            break
 
     max_score = max(frame_scores, default=0.0)
     avg_score = (sum(frame_scores) / len(frame_scores)) if frame_scores else 0.0

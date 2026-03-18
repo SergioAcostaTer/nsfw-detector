@@ -36,6 +36,7 @@ def _job_to_scan_status(job):
         current_file=job.meta.get("current_file", ""),
         job_id=job.id,
         status=job.status,
+        eta_seconds=job.meta.get("eta_seconds"),
     )
 
 

@@ -31,6 +31,27 @@ export function formatDuration(seconds: number) {
   return `${minutes}m ${remaining}s`;
 }
 
+export function formatEtaSeconds(seconds: number | null | undefined) {
+  if (seconds == null || !Number.isFinite(seconds) || seconds <= 0) {
+    return "Estimating...";
+  }
+
+  const rounded = Math.max(1, Math.round(seconds));
+  if (rounded < 60) {
+    return `${rounded}s`;
+  }
+
+  const minutes = Math.floor(rounded / 60);
+  const remaining = rounded % 60;
+  if (minutes < 60) {
+    return remaining === 0 ? `${minutes}m` : `${minutes}m ${remaining}s`;
+  }
+
+  const hours = Math.floor(minutes / 60);
+  const leftoverMinutes = minutes % 60;
+  return leftoverMinutes === 0 ? `${hours}h` : `${hours}h ${leftoverMinutes}m`;
+}
+
 export function formatTimeAgo(timestamp: number | null) {
   if (!timestamp) {
     return "Never";

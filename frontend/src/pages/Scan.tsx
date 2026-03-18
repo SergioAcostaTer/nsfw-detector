@@ -129,6 +129,7 @@ export function Scan() {
           total={status.data?.total}
           progress={status.data?.progress}
           currentFile={status.data?.current_file}
+          etaSeconds={status.data?.eta_seconds}
         />
       </div>
 

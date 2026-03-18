@@ -43,6 +43,7 @@ class ScanStatusResponse(BaseModel):
     current_file: str
     job_id: Optional[str] = None
     status: str
+    eta_seconds: Optional[int] = None
 
 
 class ScanResultItem(BaseModel):

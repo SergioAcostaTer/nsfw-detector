@@ -6,7 +6,7 @@ import onnxruntime as ort
 
 from app.config import MODEL_PATH
 from app.settings import get_onnx_providers
-from app.scanner.decision import CLASS_WEIGHTS, SAFE_CLASSES
+from app.scanner.decision import CLASS_WEIGHTS
 
 CLASS_MAP = {
     0: "FEMALE_GENITALIA_COVERED",
@@ -30,7 +30,7 @@ CLASS_MAP = {
 }
 SCORE_THRESHOLD = 0.4
 NMS_THRESHOLD = 0.45
-MIN_AREA_RATIO = 0.02
+MIN_AREA_RATIO = 0.005
 _detector = None
 
 
@@ -69,7 +69,7 @@ class Detector:
                 continue
 
             center_x, center_y, width, height = [float(value) for value in pred[:4]]
-            if image_area > 0 and (width * height) / image_area < MIN_AREA_RATIO and CLASS_MAP[class_id] in SAFE_CLASSES:
+            if image_area > 0 and (width * height) / image_area < MIN_AREA_RATIO:
                 continue
             x = center_x - (width / 2.0)
             y = center_y - (height / 2.0)
