@@ -9,8 +9,8 @@ import { applyTheme, storeTheme } from "@/shared/lib/theme";
 
 const DEFAULT_SETTINGS: AppSettings = {
   gpu_enabled: true,
-  explicit_threshold: 0.6,
-  borderline_threshold: 0.4,
+  explicit_threshold: 0.45,
+  borderline_threshold: 0.28,
   custom_skip_folders: [],
   auto_delete_days: 30,
   theme: "dark",
@@ -144,7 +144,7 @@ export function Settings() {
         </div>
       </Section>
 
-      <Section title="Detection Thresholds" description="Tune how aggressive explicit and borderline decisions should be.">
+      <Section title="Detection Thresholds" description="Lower values flag more content and reduce false negatives, but they can raise false positives.">
         <div>
           <label className="flex justify-between text-sm font-medium">
             <span>Explicit threshold</span>
@@ -152,9 +152,9 @@ export function Settings() {
           </label>
           <input
             type="range"
-            min={0.3}
+            min={0.15}
             max={0.95}
-            step={0.05}
+            step={0.01}
             value={localSettings.explicit_threshold}
             onChange={(event) => updateField("explicit_threshold", Number(event.target.value))}
             className="mt-2 w-full"
@@ -167,9 +167,9 @@ export function Settings() {
           </label>
           <input
             type="range"
-            min={0.3}
+            min={0.15}
             max={0.95}
-            step={0.05}
+            step={0.01}
             value={localSettings.borderline_threshold}
             onChange={(event) => updateField("borderline_threshold", Number(event.target.value))}
             className="mt-2 w-full"

@@ -40,41 +40,51 @@ CLASS_WEIGHTS = {
 }
 
 CLASS_THRESHOLDS = {
-    "FEMALE_GENITALIA_EXPOSED": 0.30,
-    "MALE_GENITALIA_EXPOSED": 0.30,
-    "ANUS_EXPOSED": 0.30,
-    "FEMALE_BREAST_EXPOSED": 0.50,
-    "BUTTOCKS_EXPOSED": 0.50,
+    "FEMALE_GENITALIA_EXPOSED": 0.24,
+    "MALE_GENITALIA_EXPOSED": 0.24,
+    "ANUS_EXPOSED": 0.24,
+    "FEMALE_BREAST_EXPOSED": 0.38,
+    "BUTTOCKS_EXPOSED": 0.34,
+    "FEMALE_GENITALIA_COVERED": 0.22,
+    "FEMALE_BREAST_COVERED": 0.26,
+    "BUTTOCKS_COVERED": 0.26,
+    "ANUS_COVERED": 0.24,
 }
 
 
-def decide(detections, *, explicit_threshold=0.6, borderline_threshold=0.4):
-    explicit_scores = []
+def decide(detections, *, explicit_threshold=0.45, borderline_threshold=0.28):
     sexual_scores = []
     explicit_hits = []
+    covered_scores = []
 
     for detection in detections:
         label = detection.get("class", "")
         score = float(detection.get("score", 0.0))
-        weighted_score = float(detection.get("weighted_score", score * CLASS_WEIGHTS.get(label, 0.2)))
 
         if label in EXPLICIT_CLASSES and score >= CLASS_THRESHOLDS.get(label, explicit_threshold):
-            explicit_scores.append(weighted_score)
             explicit_hits.append(score)
         elif label in SEXUAL_CLASSES and score >= CLASS_THRESHOLDS.get(label, borderline_threshold):
-            sexual_scores.append(weighted_score)
+            sexual_scores.append(score)
+        elif label in COVERED_CLASSES and score >= CLASS_THRESHOLDS.get(label, borderline_threshold):
+            covered_scores.append(score)
 
-    max_explicit = max(explicit_scores, default=0.0)
     max_sexual = max(sexual_scores, default=0.0)
     max_raw_explicit = max(explicit_hits, default=0.0)
+    max_covered = max(covered_scores, default=0.0)
 
-    if len(explicit_hits) >= 2 and max_raw_explicit >= 0.25:
+    if len(explicit_hits) >= 2 and max_raw_explicit >= 0.22:
         return "explicit", max_raw_explicit
 
-    if max_raw_explicit >= min(explicit_threshold, 0.35):
+    if max_raw_explicit >= min(explicit_threshold, 0.28):
         return "explicit", max_raw_explicit
 
-    if max_sexual >= max(borderline_threshold, 0.35):
+    if max_sexual >= max(borderline_threshold, 0.24):
         return "borderline", max_sexual
+
+    if len(covered_scores) >= 2 and max_covered >= 0.22:
+        return "borderline", max_covered
+
+    if max_covered >= max(borderline_threshold, 0.30):
+        return "borderline", max_covered
 
     return "safe", 0.0

@@ -6,8 +6,8 @@ from app.config import BASE_DIR
 SETTINGS_PATH = BASE_DIR / "data" / "settings.json"
 DEFAULT_SETTINGS = {
     "gpu_enabled": True,
-    "explicit_threshold": 0.6,
-    "borderline_threshold": 0.4,
+    "explicit_threshold": 0.45,
+    "borderline_threshold": 0.28,
     "custom_skip_folders": [],
     "auto_delete_days": 30,
     "theme": "dark",
