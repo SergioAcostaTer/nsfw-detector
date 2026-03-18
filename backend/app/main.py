@@ -12,7 +12,7 @@ from app.api.routes import (
     sessions_router,
     settings_router,
 )
-from app.application.jobs.registry import ensure_jobs_registered
+from app.application.jobs.registry import ensure_jobs_registered, recover_running_sessions
 from app.config import QUARANTINE_DIR
 from app.db.migrate import run_migrations
 from app.db.models import init_db
@@ -50,6 +50,7 @@ def create_app():
             run_migrations(conn)
             conn.commit()
         ensure_jobs_registered()
+        recover_running_sessions()
         if scheduler is None:
             scheduler = BackgroundScheduler()
             scheduler.add_job(lambda: run_auto_delete(load_settings().get("auto_delete_days", 30)), "interval", hours=24)

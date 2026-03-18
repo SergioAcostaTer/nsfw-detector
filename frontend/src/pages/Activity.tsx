@@ -6,7 +6,7 @@ import { useState } from "react";
 import { getSessionResults, getSessions } from "@/api/client";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { EmptyState } from "@/components/ui";
-import { formatTimeAgo } from "@/shared/lib/format";
+import { formatDuration, formatTimeAgo } from "@/shared/lib/format";
 import { queryKeys } from "@/shared/lib/queryKeys";
 
 const STATUS_STYLES: Record<string, { bg: string; color: string }> = {
@@ -51,7 +51,8 @@ export function Activity() {
             </thead>
             <tbody>
               {sessions?.map((session) => {
-                const duration = session.ended_at ? `${Math.max(1, session.ended_at - session.started_at)}s` : "In progress";
+                const durationMs = session.ended_at ? session.ended_at - session.started_at : null;
+                const duration = durationMs ? formatDuration(durationMs / 1000) : "In progress";
                 const statusStyle = STATUS_STYLES[session.status] ?? { bg: "var(--bg-2)", color: "var(--ink-1)" };
                 return (
                   <Fragment key={session.id}>

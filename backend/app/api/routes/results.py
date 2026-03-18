@@ -4,6 +4,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse, Response
+from PIL import Image
 
 from app.api.schemas import ActionRequest
 from app.infrastructure.db.repositories.files_repository import FilesRepository
@@ -29,6 +30,28 @@ def get_results(
     with get_db() as conn:
         repo = ResultsRepository(conn)
         return repo.get_latest_results(decision=decision, folder=folder, status=status, search=q, limit=limit, offset=offset)
+
+
+@router.get("/results/safe")
+def get_safe_results(
+    folder: Optional[str] = Query(None),
+    status: Optional[str] = Query("active"),
+    q: Optional[str] = Query(None),
+    limit: int = Query(100),
+    offset: int = Query(0),
+):
+    with get_db() as conn:
+        repo = ResultsRepository(conn)
+        return repo.get_latest_results(
+            decision="safe",
+            folder=folder,
+            status=status,
+            search=q,
+            limit=limit,
+            offset=offset,
+            include_safe=True,
+            rescued_only=True,
+        )
 
 
 @router.get("/results/count")
@@ -97,3 +120,29 @@ def serve_thumbnail(path: str = Query(...), size: int = Query(400)):
         raise HTTPException(status_code=404, detail="Image not found")
     data = make_thumbnail(media_path, max_size=size, cache_key=hash_file(media_path))
     return Response(content=data, media_type="image/webp")
+
+
+@router.get("/file-meta")
+def get_file_meta(path: str = Query(...)):
+    media_path = Path(path)
+    if not media_path.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+
+    stat = media_path.stat()
+    result = {
+        "size_bytes": stat.st_size,
+        "modified_at": int(stat.st_mtime),
+        "extension": media_path.suffix.lower(),
+        "mime_type": None,
+        "width": None,
+        "height": None,
+    }
+
+    try:
+        with Image.open(media_path) as image:
+            result["width"], result["height"] = image.size
+            result["mime_type"] = Image.MIME.get(image.format or "", None)
+    except Exception:
+        pass
+
+    return result

@@ -13,7 +13,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <Header collapsed={sidebarCollapsed} />
       <main
         className="min-h-screen pt-12 transition-[padding-left] duration-200"
-        style={{ paddingLeft: sidebarCollapsed ? "76px" : "240px" }}
+        style={{ paddingLeft: sidebarCollapsed ? "84px" : "240px" }}
       >
         <div className="px-6 py-6">{children}</div>
       </main>

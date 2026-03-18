@@ -2,6 +2,19 @@ import { Clock, RotateCcw, Trash2 } from "lucide-react";
 
 import { thumbnailUrl, type ScanResult } from "@/api/client";
 
+function urgencyStyle(days: number) {
+  if (days <= 2) {
+    return { border: "var(--status-explicit)", glow: "rgba(239,68,68,0.15)", text: "var(--status-explicit)" };
+  }
+  if (days <= 5) {
+    return { border: "var(--status-borderline)", glow: "rgba(245,158,11,0.10)", text: "var(--status-borderline)" };
+  }
+  if (days <= 10) {
+    return { border: "var(--border-default)", glow: "transparent", text: "var(--text-primary)" };
+  }
+  return { border: "var(--border-subtle)", glow: "transparent", text: "var(--text-muted)" };
+}
+
 export function QuarantineCard({
   item,
   daysLeft,
@@ -14,10 +27,11 @@ export function QuarantineCard({
   onDelete: () => void;
 }) {
   const urgent = daysLeft <= 5;
+  const style = urgencyStyle(daysLeft);
   const filename = item.path.split(/[\\/]/).pop() ?? item.path;
 
   return (
-    <div className="overflow-hidden rounded-lg" style={{ background: "var(--bg-1)", border: "1px solid var(--line)" }}>
+    <div className="overflow-hidden rounded-lg" style={{ background: "var(--bg-1)", border: `1px solid ${style.border}`, boxShadow: `0 0 20px ${style.glow}` }}>
       <div className="relative aspect-square overflow-hidden">
         <img
           src={thumbnailUrl(item.path)}
@@ -26,7 +40,7 @@ export function QuarantineCard({
           style={{ filter: "blur(8px) brightness(0.6)" }}
         />
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-1">
-          <span className="font-mono text-2xl font-semibold" style={{ color: urgent ? "var(--red)" : "var(--ink-1)" }}>
+          <span className="font-mono text-2xl font-semibold" style={{ color: style.text }}>
             {daysLeft}d
           </span>
           <span className="text-xs" style={{ color: "var(--ink-2)" }}>

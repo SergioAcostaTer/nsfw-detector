@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { MouseEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
+import { CheckCircle, ListChecks } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 
 import { appStore, useAppStore, type ReviewFilter } from "@/app/store";
@@ -8,144 +9,153 @@ import {
   deleteFiles,
   getFolders,
   getResults,
+  getSafeResults,
   quarantineFiles,
   rescueFiles,
   restoreFiles,
-  unrescueFiles,
+  type FolderSummary,
+  type ResultsResponse,
   type ScanResult,
+  unrescueFiles,
 } from "@/api/client";
-import { ConfirmDialog, EmptyState, Kbd, toast } from "@/components/ui";
+import { ConfirmDialog, DragHandle, EmptyState, Kbd, SkeletonGrid, toast } from "@/components/ui";
 import { FileDetailsPane } from "@/features/review/components/FileDetailsPane";
 import { FileGrid } from "@/features/review/components/FileGrid";
+import { FileListView } from "@/features/review/components/FileListView";
 import { FileToolbar } from "@/features/review/components/FileToolbar";
 import { FolderExplorer, buildExplorerTree } from "@/features/review/components/FolderExplorer";
+import { usePanelResize } from "@/features/review/hooks/usePanelResize";
 import { queryKeys } from "@/shared/lib/queryKeys";
 
-const FILTERS: ReviewFilter[] = ["all", "explicit", "borderline"];
-const RESCUED_STORAGE_KEY = "nsfw-scanner-rescued-folders";
+const FILTERS: ReviewFilter[] = ["all", "explicit", "borderline", "safe"];
 
 function normalizePath(path: string) {
   return path.replace(/\\/g, "/");
 }
 
-function getGridColumns() {
-  if (typeof window === "undefined") {
-    return 5;
+function buildSafeFolderSummaries(items: ScanResult[]): FolderSummary[] {
+  const grouped = new Map<string, FolderSummary>();
+  for (const item of items) {
+    const existing = grouped.get(item.folder);
+    if (existing) {
+      existing.count += 1;
+      existing.flagged += 1;
+    } else {
+      grouped.set(item.folder, {
+        folder: item.folder,
+        count: 1,
+        flagged: 1,
+        last_scanned: item.created_at,
+      });
+    }
   }
-  if (window.innerWidth >= 1800) {
-    return 8;
-  }
-  if (window.innerWidth >= 1536) {
-    return 6;
-  }
-  if (window.innerWidth >= 1280) {
-    return 5;
-  }
-  if (window.innerWidth >= 1024) {
-    return 4;
-  }
-  return 3;
-}
-
-function loadRescuedState() {
-  if (typeof window === "undefined") {
-    return {} as Record<string, number[]>;
-  }
-  try {
-    return JSON.parse(window.localStorage.getItem(RESCUED_STORAGE_KEY) ?? "{}") as Record<string, number[]>;
-  } catch {
-    return {};
-  }
+  return Array.from(grouped.values()).sort((left, right) => left.folder.localeCompare(right.folder));
 }
 
 export function Review() {
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
-  const storeFilter = useAppStore((state) => state.activeFilter);
   const activeFolder = useAppStore((state) => state.activeFolder);
   const selectedIds = useAppStore((state) => state.selectedIds);
   const lastFocusedId = useAppStore((state) => state.lastFocusedId);
   const undoDepth = useAppStore((state) => state.undoStack.length);
+  const storeFilter = useAppStore((state) => state.activeFilter);
+
+  const [view, setView] = useState<"grid" | "list">(() => (localStorage.getItem("nsfw-review-view") === "list" ? "list" : "grid"));
+  const [gridCols, setGridCols] = useState<number>(() => Number(localStorage.getItem("nsfw-grid-cols") ?? 4));
   const [completedFolders, setCompletedFolders] = useState<Set<string>>(new Set());
   const [pendingDeleteIds, setPendingDeleteIds] = useState<number[]>([]);
-  const [rescuedByFolder, setRescuedByFolder] = useState<Record<string, number[]>>(() => loadRescuedState());
+  const [pendingIds, setPendingIds] = useState<Set<number>>(new Set());
+
+  const safeMode = storeFilter === "safe";
+  const folderTree = usePanelResize(240, 160, 400, "left", "nsfw-panel-width-left");
+  const inspector = usePanelResize(420, 320, 640, "right", "nsfw-panel-width-right");
+
+  useEffect(() => {
+    localStorage.setItem("nsfw-review-view", view);
+  }, [view]);
+
+  useEffect(() => {
+    localStorage.setItem("nsfw-grid-cols", String(gridCols));
+  }, [gridCols]);
 
   useEffect(() => {
     const queryFilter = searchParams.get("decision");
     const nextFilter: ReviewFilter =
-      queryFilter === "explicit" || queryFilter === "borderline" ? queryFilter : storeFilter ?? "all";
-    appStore.setActiveFilter(nextFilter);
+      queryFilter === "explicit" || queryFilter === "borderline" || queryFilter === "safe" ? queryFilter : "all";
+    if (nextFilter !== storeFilter) {
+      appStore.setActiveFilter(nextFilter);
+    }
   }, [searchParams, storeFilter]);
-
-  useEffect(() => {
-    window.localStorage.setItem(RESCUED_STORAGE_KEY, JSON.stringify(rescuedByFolder));
-  }, [rescuedByFolder]);
 
   const foldersQuery = useQuery({
     queryKey: queryKeys.folders,
     queryFn: () => getFolders().then((response) => response.data),
     refetchInterval: 10000,
+    enabled: !safeMode,
   });
 
-  const flaggedFolders = useMemo(
-    () => (foldersQuery.data ?? []).filter((entry) => entry.flagged > 0).sort((left, right) => left.folder.localeCompare(right.folder)),
-    [foldersQuery.data],
+  const safeFoldersQuery = useQuery({
+    queryKey: queryKeys.safeFiles(null),
+    queryFn: () => getSafeResults({ status: "active", limit: 1000 }).then((response) => response.data),
+    enabled: safeMode,
+  });
+
+  const folderSummaries = useMemo(
+    () => (safeMode ? buildSafeFolderSummaries(safeFoldersQuery.data?.items ?? []) : (foldersQuery.data ?? []).filter((entry) => entry.flagged > 0)),
+    [foldersQuery.data, safeFoldersQuery.data?.items, safeMode],
   );
 
-  const folderMap = useMemo(() => Object.fromEntries(flaggedFolders.map((folder) => [normalizePath(folder.folder), folder.folder])), [flaggedFolders]);
+  const folderMap = useMemo(() => Object.fromEntries(folderSummaries.map((folder) => [normalizePath(folder.folder), folder.folder])), [folderSummaries]);
 
   useEffect(() => {
-    if (!flaggedFolders.length) {
+    if (!folderSummaries.length) {
       appStore.setActiveFolder(null);
       return;
     }
     if (!activeFolder || !folderMap[activeFolder]) {
-      appStore.setActiveFolder(normalizePath(flaggedFolders[0].folder));
+      appStore.setActiveFolder(normalizePath(folderSummaries[0].folder));
     }
-  }, [activeFolder, flaggedFolders, folderMap]);
+  }, [activeFolder, folderMap, folderSummaries]);
 
   const selectedFolderPath = activeFolder ? folderMap[activeFolder] ?? null : null;
 
   const itemsQuery = useQuery({
-    queryKey: queryKeys.reviewFolder(storeFilter, selectedFolderPath),
+    queryKey: safeMode ? queryKeys.safeFiles(selectedFolderPath) : queryKeys.reviewFolder(storeFilter, selectedFolderPath),
     enabled: Boolean(selectedFolderPath),
     queryFn: () =>
-      getResults({
-        decision: storeFilter !== "all" ? storeFilter : undefined,
-        folder: selectedFolderPath ?? undefined,
-        status: "active",
-        limit: 1000,
-      }).then((response) => response.data),
+      (safeMode
+        ? getSafeResults({ folder: selectedFolderPath ?? undefined, status: "active", limit: 1000 })
+        : getResults({
+            decision: storeFilter !== "all" ? storeFilter : undefined,
+            folder: selectedFolderPath ?? undefined,
+            status: "active",
+            limit: 1000,
+          })
+      ).then((response) => response.data),
   });
 
-  const treeNodes = useMemo(() => buildExplorerTree(flaggedFolders, completedFolders), [completedFolders, flaggedFolders]);
   const items = itemsQuery.data?.items ?? [];
-  const rescuedIds = useMemo(() => new Set(rescuedByFolder[activeFolder ?? ""] ?? []), [activeFolder, rescuedByFolder]);
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+  const rescuedIds = useMemo(() => new Set((safeMode ? items : []).map((item) => item.id)), [items, safeMode]);
   const remainingItems = useMemo(() => items.filter((item) => !rescuedIds.has(item.id)), [items, rescuedIds]);
-  const activeItem =
-    items.find((item) => item.id === lastFocusedId) ??
-    items.find((item) => selectedSet.has(item.id)) ??
-    items[0] ??
-    null;
+  const treeNodes = useMemo(() => buildExplorerTree(folderSummaries, completedFolders), [completedFolders, folderSummaries]);
+  const activeItem = items.find((item) => item.id === lastFocusedId) ?? items.find((item) => selectedSet.has(item.id)) ?? items[0] ?? null;
 
-  useEffect(() => {
-    if (activeItem?.id) {
-      appStore.setLastFocusedId(activeItem.id);
-    }
-  }, [activeItem?.id]);
+  const currentQueryKey = safeMode ? queryKeys.safeFiles(selectedFolderPath) : queryKeys.reviewFolder(storeFilter, selectedFolderPath);
 
   const invalidateMeta = () => {
     queryClient.invalidateQueries({ queryKey: queryKeys.folders });
     queryClient.invalidateQueries({ queryKey: queryKeys.resultsCount });
     queryClient.invalidateQueries({ queryKey: queryKeys.stats });
+    queryClient.invalidateQueries({ queryKey: ["reviewFolder"] });
+    queryClient.invalidateQueries({ queryKey: queryKeys.safeFiles(null) });
+    queryClient.invalidateQueries({ queryKey: queryKeys.safeFiles(selectedFolderPath) });
+    queryClient.invalidateQueries({ queryKey: currentQueryKey });
   };
 
-  const removeItemsFromCurrentFolder = (ids: number[]) => {
-    if (!selectedFolderPath) {
-      return;
-    }
-    queryClient.setQueryData<{ total: number; items: ScanResult[] } | undefined>(queryKeys.reviewFolder(storeFilter, selectedFolderPath), (current) => {
+  const removeFromCurrentQuery = (ids: number[]) => {
+    queryClient.setQueryData<ResultsResponse | undefined>(currentQueryKey, (current) => {
       if (!current) {
         return current;
       }
@@ -154,8 +164,16 @@ export function Review() {
     });
   };
 
+  const addPending = (ids: number[]) => setPendingIds((current) => new Set([...current, ...ids]));
+  const clearPending = (ids: number[]) =>
+    setPendingIds((current) => {
+      const next = new Set(current);
+      ids.forEach((id) => next.delete(id));
+      return next;
+    });
+
   const advanceFolderIfComplete = (removedIds: number[]) => {
-    if (!activeFolder) {
+    if (!activeFolder || safeMode) {
       return;
     }
     const nextRemaining = remainingItems.filter((item) => !removedIds.includes(item.id));
@@ -163,57 +181,86 @@ export function Review() {
       return;
     }
     setCompletedFolders((current) => new Set(current).add(activeFolder));
-    const currentIndex = flaggedFolders.findIndex((entry) => normalizePath(entry.folder) === activeFolder);
-    const nextFolder = flaggedFolders[currentIndex + 1];
+    const currentIndex = folderSummaries.findIndex((entry) => normalizePath(entry.folder) === activeFolder);
+    const nextFolder = folderSummaries[currentIndex + 1];
     if (nextFolder) {
       window.setTimeout(() => {
         appStore.setActiveFolder(normalizePath(nextFolder.folder));
         appStore.clearSelection();
-      }, 160);
+      }, 260);
     }
   };
 
   const rescueMutation = useMutation({
     mutationFn: async (ids: number[]) => rescueFiles(ids),
-    onSuccess: (_response, ids) => {
-      if (!activeFolder) {
-        return;
+    onMutate: (ids) => {
+      addPending(ids);
+      const snapshot = queryClient.getQueryData(currentQueryKey);
+      if (!safeMode) {
+        removeFromCurrentQuery(ids);
       }
-      setRescuedByFolder((current) => ({
-        ...current,
-        [activeFolder]: Array.from(new Set([...(current[activeFolder] ?? []), ...ids])),
-      }));
+      return { snapshot };
+    },
+    onError: (_error, ids, context) => {
+      clearPending(ids);
+      if (context?.snapshot) {
+        queryClient.setQueryData(currentQueryKey, context.snapshot);
+      }
+      toast({ title: "Failed to mark files safe", variant: "error" });
+    },
+    onSuccess: (_response, ids) => {
+      clearPending(ids);
       appStore.clearSelection();
       appStore.pushUndo({ type: "rescue", ids });
       invalidateMeta();
       toast({ title: `${ids.length} file${ids.length === 1 ? "" : "s"} marked safe` });
     },
-    onError: () => toast({ title: "Failed to mark files safe", variant: "error" }),
   });
 
   const unrescueMutation = useMutation({
     mutationFn: async (ids: number[]) => unrescueFiles(ids),
-    onSuccess: (_response, ids) => {
-      if (!activeFolder) {
-        return;
+    onMutate: (ids) => {
+      addPending(ids);
+      const snapshot = queryClient.getQueryData(currentQueryKey);
+      if (safeMode) {
+        removeFromCurrentQuery(ids);
       }
-      setRescuedByFolder((current) => ({
-        ...current,
-        [activeFolder]: (current[activeFolder] ?? []).filter((id) => !ids.includes(id)),
-      }));
+      return { snapshot };
+    },
+    onError: (_error, ids, context) => {
+      clearPending(ids);
+      if (context?.snapshot) {
+        queryClient.setQueryData(currentQueryKey, context.snapshot);
+      }
+      toast({ title: "Failed to return files to review", variant: "error" });
+    },
+    onSuccess: (_response, ids) => {
+      clearPending(ids);
       appStore.clearSelection();
       appStore.pushUndo({ type: "unrescue", ids });
       invalidateMeta();
       toast({ title: `${ids.length} file${ids.length === 1 ? "" : "s"} returned to review` });
     },
-    onError: () => toast({ title: "Failed to restore review state", variant: "error" }),
   });
 
   const quarantineMutation = useMutation({
     mutationFn: async (ids: number[]) => quarantineFiles(ids),
+    onMutate: (ids) => {
+      addPending(ids);
+      const snapshot = queryClient.getQueryData(currentQueryKey);
+      removeFromCurrentQuery(ids);
+      return { snapshot };
+    },
+    onError: (_error, ids, context) => {
+      clearPending(ids);
+      if (context?.snapshot) {
+        queryClient.setQueryData(currentQueryKey, context.snapshot);
+      }
+      toast({ title: "Failed to quarantine files", variant: "error" });
+    },
     onSuccess: (_response, ids) => {
+      clearPending(ids);
       appStore.clearSelection();
-      removeItemsFromCurrentFolder(ids);
       appStore.pushUndo({ type: "quarantine", ids });
       invalidateMeta();
       advanceFolderIfComplete(ids);
@@ -223,7 +270,6 @@ export function Review() {
         onAction: () => undoLast(),
       });
     },
-    onError: () => toast({ title: "Failed to quarantine files", variant: "error" }),
   });
 
   const restoreMutation = useMutation({
@@ -237,14 +283,26 @@ export function Review() {
 
   const deleteMutation = useMutation({
     mutationFn: async (ids: number[]) => deleteFiles(ids),
+    onMutate: (ids) => {
+      addPending(ids);
+      const snapshot = queryClient.getQueryData(currentQueryKey);
+      removeFromCurrentQuery(ids);
+      return { snapshot };
+    },
+    onError: (_error, ids, context) => {
+      clearPending(ids);
+      if (context?.snapshot) {
+        queryClient.setQueryData(currentQueryKey, context.snapshot);
+      }
+      toast({ title: "Failed to delete files", variant: "error" });
+    },
     onSuccess: (_response, ids) => {
+      clearPending(ids);
       appStore.clearSelection();
-      removeItemsFromCurrentFolder(ids);
       invalidateMeta();
       advanceFolderIfComplete(ids);
       toast({ title: `${ids.length} file${ids.length === 1 ? "" : "s"} deleted permanently` });
     },
-    onError: () => toast({ title: "Failed to delete files", variant: "error" }),
   });
 
   const undoLast = () => {
@@ -265,10 +323,13 @@ export function Review() {
     }
   };
 
-  const setSelection = (next: Set<number>) => {
-    appStore.setSelectedIds(Array.from(next));
-  };
+  useEffect(() => {
+    if (activeItem?.id) {
+      appStore.setLastFocusedId(activeItem.id);
+    }
+  }, [activeItem?.id]);
 
+  const setSelection = (next: Set<number>) => appStore.setSelectedIds(Array.from(next));
   const focusIndex = Math.max(0, items.findIndex((item) => item.id === (lastFocusedId ?? activeItem?.id ?? items[0]?.id)));
 
   const moveFocus = (delta: number) => {
@@ -280,6 +341,38 @@ export function Review() {
     appStore.setLastFocusedId(nextItem.id);
     if (selectedSet.size <= 1) {
       appStore.setSelectedIds([nextItem.id]);
+    }
+  };
+
+  const handleRescueSelected = () => {
+    const basis = selectedIds.length > 0 ? selectedIds : activeItem ? [activeItem.id] : [];
+    if (basis.length === 0) {
+      return;
+    }
+    if (safeMode) {
+      unrescueMutation.mutate(basis);
+    } else {
+      rescueMutation.mutate(basis);
+    }
+  };
+
+  const handleQuarantineSelected = () => {
+    if (safeMode) {
+      return;
+    }
+    const basis = selectedIds.length > 0 ? selectedIds : activeItem ? [activeItem.id] : [];
+    if (basis.length > 0) {
+      quarantineMutation.mutate(basis);
+    }
+  };
+
+  const handleDeleteSelected = () => {
+    if (safeMode) {
+      return;
+    }
+    const basis = selectedIds.length > 0 ? selectedIds : activeItem ? [activeItem.id] : [];
+    if (basis.length > 0) {
+      setPendingDeleteIds(basis);
     }
   };
 
@@ -302,6 +395,14 @@ export function Review() {
         appStore.clearSelection();
         return;
       }
+      if (event.key.toLowerCase() === "g") {
+        setView("grid");
+        return;
+      }
+      if (event.key.toLowerCase() === "l") {
+        setView("list");
+        return;
+      }
       if (event.key === "ArrowLeft") {
         event.preventDefault();
         moveFocus(-1);
@@ -314,12 +415,12 @@ export function Review() {
       }
       if (event.key === "ArrowUp") {
         event.preventDefault();
-        moveFocus(-getGridColumns());
+        moveFocus(-gridCols);
         return;
       }
       if (event.key === "ArrowDown") {
         event.preventDefault();
-        moveFocus(getGridColumns());
+        moveFocus(gridCols);
         return;
       }
       if (event.key === " ") {
@@ -339,19 +440,19 @@ export function Review() {
         handleRescueSelected();
         return;
       }
-      if (event.key.toLowerCase() === "q") {
+      if (!safeMode && event.key.toLowerCase() === "q") {
         event.preventDefault();
         handleQuarantineSelected();
         return;
       }
-      if (event.key.toLowerCase() === "d") {
+      if (!safeMode && event.key.toLowerCase() === "d") {
         event.preventDefault();
         handleDeleteSelected();
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [focusIndex, items, selectedIds, activeFolder, rescuedIds, remainingItems]);
+  }, [focusIndex, gridCols, items, selectedIds, safeMode]);
 
   const handleItemClick = (event: MouseEvent, id: number, index: number) => {
     event.stopPropagation();
@@ -376,41 +477,9 @@ export function Review() {
     setSelection(next);
   };
 
-  const handleRescueSelected = () => {
-    const basis = selectedIds.length > 0 ? selectedIds : activeItem ? [activeItem.id] : [];
-    const toRescue = basis.filter((id) => !rescuedIds.has(id));
-    const toUnrescue = basis.filter((id) => rescuedIds.has(id));
-    if (toRescue.length > 0) {
-      rescueMutation.mutate(toRescue);
-    }
-    if (toUnrescue.length > 0) {
-      unrescueMutation.mutate(toUnrescue);
-    }
-  };
-
-  const handleQuarantineSelected = () => {
-    const basis = selectedIds.length > 0 ? selectedIds : activeItem ? [activeItem.id] : [];
-    if (basis.length > 0) {
-      quarantineMutation.mutate(basis.filter((id) => !rescuedIds.has(id)));
-    }
-  };
-
-  const handleDeleteSelected = () => {
-    const basis = selectedIds.length > 0 ? selectedIds : activeItem ? [activeItem.id] : [];
-    if (basis.length > 0) {
-      setPendingDeleteIds(basis);
-    }
-  };
-
-  const handleQuarantineRemaining = () => {
-    if (remainingItems.length > 0) {
-      quarantineMutation.mutate(remainingItems.map((item) => item.id));
-    }
-  };
-
   return (
     <div className="-mx-6 -my-6 flex h-[calc(100vh-48px)] border-t" style={{ borderColor: "var(--line)" }}>
-      <div className="flex w-[240px] shrink-0 flex-col border-r bg-[var(--bg-1)]" style={{ borderColor: "var(--line)" }}>
+      <div className="flex shrink-0 flex-col border-r bg-[var(--bg-1)]" style={{ width: folderTree.width, borderColor: "var(--line)" }}>
         <FolderExplorer
           nodes={treeNodes}
           selectedPath={activeFolder}
@@ -420,6 +489,7 @@ export function Review() {
           }}
         />
       </div>
+      <DragHandle onMouseDown={folderTree.onMouseDown} />
 
       <div className="flex min-w-0 flex-1 flex-col bg-[var(--bg-0)]" onClick={() => appStore.clearSelection()}>
         <div className="border-b px-4 pt-4" style={{ borderColor: "var(--line)" }}>
@@ -432,6 +502,7 @@ export function Review() {
                   onClick={() => {
                     appStore.setActiveFilter(entry);
                     setSearchParams(entry === "all" ? {} : { decision: entry });
+                    appStore.clearSelection();
                   }}
                   className={`rounded-full px-3 py-1.5 text-sm font-medium transition ${storeFilter === entry ? "bg-[var(--surface-hover)] text-[var(--text-primary)]" : "bg-transparent text-[var(--text-secondary)] hover:bg-[var(--surface-overlay)]"}`}
                 >
@@ -440,7 +511,7 @@ export function Review() {
               ))}
             </div>
             <div className="flex items-center gap-2 text-xs text-[var(--ink-2)]">
-              <span>{items.length} flagged</span>
+              <span>{items.length} visible</span>
               <span>·</span>
               <span>{selectedIds.length} selected</span>
               <span>·</span>
@@ -449,31 +520,58 @@ export function Review() {
           </div>
         </div>
 
+        {selectedIds.length > 0 ? (
+          <div className="overflow-hidden border-b border-blue-500/20 bg-blue-500/10 px-4 py-2 text-sm text-blue-400">
+            <span className="font-semibold">{selectedIds.length} selected</span>
+            <button type="button" onClick={() => appStore.clearSelection()} className="ml-3 text-xs text-blue-400/70 hover:text-blue-400">
+              Clear (Esc)
+            </button>
+          </div>
+        ) : null}
+
         <FileToolbar
           folderName={selectedFolderPath}
           selectedCount={selectedIds.length}
-          totalRemaining={remainingItems.length}
+          totalRemaining={safeMode ? items.length : remainingItems.length}
+          safeMode={safeMode}
+          view={view}
+          gridCols={gridCols}
+          onViewChange={setView}
+          onGridColsChange={setGridCols}
           onRescueSelected={handleRescueSelected}
           onQuarantineSelected={handleQuarantineSelected}
           onDeleteSelected={handleDeleteSelected}
-          onQuarantineRemaining={handleQuarantineRemaining}
+          onQuarantineRemaining={() => {
+            if (!safeMode && remainingItems.length > 0) {
+              quarantineMutation.mutate(remainingItems.map((item) => item.id));
+            }
+          }}
         />
 
         <div className="flex-1 overflow-y-auto">
           {itemsQuery.isLoading ? (
-            <div className="p-8 text-center text-sm text-[var(--ink-2)]">Loading folder contents...</div>
-          ) : flaggedFolders.length === 0 ? (
+            <SkeletonGrid cols={gridCols} />
+          ) : folderSummaries.length === 0 ? (
             <div className="p-8">
-              <EmptyState title="No flagged files to review" description="Run a scan and triage folders will appear here." />
+              <EmptyState title={safeMode ? "No safe files yet" : "No flagged files to review"} description={safeMode ? "Files you clear as safe will appear here." : "Run a scan and triage folders will appear here."} />
             </div>
           ) : items.length === 0 ? (
-            <div className="p-8 text-center text-sm text-[var(--ink-2)]">This folder is empty or fully processed.</div>
-          ) : (
+            <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
+              {!safeMode ? <CheckCircle size={48} className="text-green-400" /> : <ListChecks size={48} className="text-[var(--ink-2)]" />}
+              <p className={`text-lg font-semibold ${safeMode ? "text-[var(--ink-1)]" : "text-green-400"}`}>
+                {safeMode ? "No safe files in this folder" : "Folder complete!"}
+              </p>
+              <p className="text-sm text-[var(--text-muted)]">{safeMode ? "Pick another folder or switch back to review." : "Moving to next folder when available..."}</p>
+            </div>
+          ) : view === "grid" ? (
             <FileGrid
               items={items}
               selectedIds={selectedSet}
               rescuedIds={rescuedIds}
               focusedId={lastFocusedId}
+              pendingIds={pendingIds}
+              gridCols={gridCols}
+              safeMode={safeMode}
               onItemClick={handleItemClick}
               onItemDoubleClick={(item) => {
                 appStore.setSelectedIds([item.id]);
@@ -481,26 +579,39 @@ export function Review() {
               }}
               onRescue={(item) => {
                 appStore.setLastFocusedId(item.id);
-                if (rescuedIds.has(item.id)) {
-                  unrescueMutation.mutate([item.id]);
-                } else {
-                  rescueMutation.mutate([item.id]);
-                }
+                safeMode ? unrescueMutation.mutate([item.id]) : rescueMutation.mutate([item.id]);
               }}
               onQuarantine={(item) => {
-                appStore.setLastFocusedId(item.id);
-                quarantineMutation.mutate([item.id]);
+                if (!safeMode) {
+                  appStore.setLastFocusedId(item.id);
+                  quarantineMutation.mutate([item.id]);
+                }
               }}
               onDelete={(item) => {
-                appStore.setLastFocusedId(item.id);
-                setPendingDeleteIds([item.id]);
+                if (!safeMode) {
+                  appStore.setLastFocusedId(item.id);
+                  setPendingDeleteIds([item.id]);
+                }
               }}
+            />
+          ) : (
+            <FileListView
+              items={items}
+              selectedIds={selectedSet}
+              rescuedIds={rescuedIds}
+              pendingIds={pendingIds}
+              safeMode={safeMode}
+              onItemClick={handleItemClick}
+              onRescue={(item) => (safeMode ? unrescueMutation.mutate([item.id]) : rescueMutation.mutate([item.id]))}
+              onQuarantine={(item) => !safeMode && quarantineMutation.mutate([item.id])}
+              onDelete={(item) => !safeMode && setPendingDeleteIds([item.id])}
             />
           )}
         </div>
       </div>
 
-      <div className="flex w-[340px] shrink-0 flex-col border-l bg-[var(--bg-1)]" style={{ borderColor: "var(--line)" }}>
+      <DragHandle onMouseDown={inspector.onMouseDown} />
+      <div className="flex shrink-0 flex-col border-l bg-[var(--bg-1)]" style={{ width: inspector.width, borderColor: "var(--line)" }}>
         <div className="flex items-center justify-between border-b px-4 py-3" style={{ borderColor: "var(--line)" }}>
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--ink-3)]">Inspector</p>
@@ -511,15 +622,12 @@ export function Review() {
         </div>
         <FileDetailsPane
           item={activeItem}
-          onRescue={(item) => {
-            if (rescuedIds.has(item.id)) {
-              unrescueMutation.mutate([item.id]);
-            } else {
-              rescueMutation.mutate([item.id]);
-            }
-          }}
-          onQuarantine={(item) => quarantineMutation.mutate([item.id])}
-          onDelete={(item) => setPendingDeleteIds([item.id])}
+          onRescue={(item) => (safeMode ? unrescueMutation.mutate([item.id]) : rescueMutation.mutate([item.id]))}
+          onQuarantine={(item) => !safeMode && quarantineMutation.mutate([item.id])}
+          onDelete={(item) => !safeMode && setPendingDeleteIds([item.id])}
+          rescuePending={Boolean(activeItem && pendingIds.has(activeItem.id))}
+          quarantinePending={Boolean(activeItem && pendingIds.has(activeItem.id))}
+          deletePending={Boolean(activeItem && pendingIds.has(activeItem.id))}
         />
       </div>
 

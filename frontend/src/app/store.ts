@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from "react";
 
-type ReviewFilter = "all" | "explicit" | "borderline";
+type ReviewFilter = "all" | "explicit" | "borderline" | "safe";
 
 type UndoAction =
   | { type: "quarantine"; ids: number[] }

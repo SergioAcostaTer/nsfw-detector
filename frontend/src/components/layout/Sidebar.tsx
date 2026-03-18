@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Activity, Archive, ChevronLeft, ChevronRight, LayoutDashboard, ScanLine, Settings, Shield, TriangleAlert } from "lucide-react";
+import { Activity, Archive, ChevronLeft, ChevronRight, Keyboard, LayoutDashboard, ScanLine, Settings, Shield, TriangleAlert } from "lucide-react";
 import { NavLink } from "react-router-dom";
 
 import { appStore } from "@/app/store";
@@ -46,13 +46,13 @@ export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
   return (
     <aside
       className="fixed inset-y-0 left-0 z-40 flex flex-col border-r px-3 py-4 transition-[width] duration-200"
-      style={{ width: collapsed ? "76px" : "240px", background: "var(--bg-1)", borderColor: "var(--line)" }}
+      style={{ width: collapsed ? "84px" : "240px", background: "var(--bg-1)", borderColor: "var(--line)" }}
     >
-      <div className="mb-6 flex items-center justify-between gap-2">
-        <div className="flex min-w-0 items-center gap-3">
+      <div className={`mb-6 flex items-center gap-2 ${collapsed ? "justify-center" : "justify-between"}`}>
+        <div className={`flex min-w-0 items-center ${collapsed ? "justify-center" : "gap-3"}`}>
         <div
-          className="flex h-10 w-10 items-center justify-center rounded-2xl"
-          style={{ background: "linear-gradient(135deg, rgba(59,130,246,0.24), rgba(99,102,241,0.18))" }}
+          className="flex h-10 w-10 items-center justify-center rounded-2xl border"
+          style={{ background: "linear-gradient(135deg, rgba(59,130,246,0.24), rgba(99,102,241,0.18))", borderColor: "var(--line)" }}
         >
           <Shield size={18} style={{ color: "var(--blue)" }} />
         </div>
@@ -65,14 +65,16 @@ export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
             </div>
           ) : null}
         </div>
-        <button
-          type="button"
-          onClick={() => appStore.setSidebarCollapsed(!collapsed)}
-          className="rounded-lg p-2 text-[var(--ink-2)] transition hover:bg-[var(--bg-2)]"
-          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-        >
-          {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
-        </button>
+        {!collapsed ? (
+          <button
+            type="button"
+            onClick={() => appStore.setSidebarCollapsed(!collapsed)}
+            className="rounded-lg p-2 text-[var(--ink-2)] transition hover:bg-[var(--bg-2)]"
+            title="Collapse sidebar"
+          >
+            <ChevronLeft size={16} />
+          </button>
+        ) : null}
       </div>
 
       <nav className="space-y-5">
@@ -92,12 +94,13 @@ export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
                     to={to}
                     end={to === "/"}
                     className={({ isActive }) =>
-                      `group relative flex items-center ${collapsed ? "justify-center" : "gap-3"} rounded-2xl px-3 py-2.5 text-sm transition-colors ${isActive ? "" : "hover:bg-white/5"}`
+                      `group relative flex items-center ${collapsed ? "justify-center px-0" : "gap-3 px-3"} rounded-2xl py-2.5 text-sm transition-colors ${isActive ? "" : "hover:bg-white/5"}`
                     }
                     style={({ isActive }) => ({
                       background: isActive ? "var(--bg-2)" : "transparent",
                       color: isActive ? "var(--ink-1)" : "var(--ink-2)",
-                      boxShadow: isActive ? "inset 3px 0 0 var(--accent-primary)" : undefined,
+                      boxShadow: isActive && !collapsed ? "inset 3px 0 0 var(--accent-primary)" : undefined,
+                      border: collapsed && isActive ? "1px solid var(--accent-primary)" : "1px solid transparent",
                     })}
                     title={collapsed ? label : undefined}
                   >
@@ -144,6 +147,28 @@ export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
         <div className="mt-auto rounded-2xl border px-4 py-3 text-xs" style={{ borderColor: "var(--line)", background: "var(--bg-2)", color: "var(--ink-2)" }}>
           <p className="font-medium text-[var(--ink-1)]">{collapsed ? "OK" : "Ready"}</p>
           {!collapsed ? <p className="mt-1">Review and quarantine flows are local-first and reversible.</p> : null}
+        </div>
+      )}
+
+      {collapsed ? (
+        <button
+          type="button"
+          onClick={() => appStore.setSidebarCollapsed(false)}
+          className="mt-3 flex h-10 items-center justify-center rounded-2xl border text-[var(--ink-2)] transition hover:bg-[var(--bg-2)]"
+          style={{ borderColor: "var(--line)" }}
+          title="Expand sidebar"
+        >
+          <ChevronRight size={16} />
+        </button>
+      ) : (
+        <div className="mt-3 rounded-2xl border px-4 py-3 text-xs" style={{ borderColor: "var(--line)", background: "var(--bg-2)", color: "var(--ink-2)" }}>
+          <div className="mb-2 flex items-center gap-2 text-[var(--ink-1)]">
+            <Keyboard size={14} />
+            <span className="font-medium">Review keys</span>
+          </div>
+          <p><span className="font-medium text-[var(--ink-1)]">Arrows</span> move</p>
+          <p><span className="font-medium text-[var(--ink-1)]">S</span> safe · <span className="font-medium text-[var(--ink-1)]">Q</span> quarantine · <span className="font-medium text-[var(--ink-1)]">D</span> delete</p>
+          <p><span className="font-medium text-[var(--ink-1)]">G</span> grid · <span className="font-medium text-[var(--ink-1)]">L</span> list · <span className="font-medium text-[var(--ink-1)]">Ctrl/Cmd+Z</span> undo</p>
         </div>
       )}
     </aside>

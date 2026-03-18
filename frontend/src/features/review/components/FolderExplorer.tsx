@@ -71,7 +71,7 @@ function TreeItem({
   level?: number;
 }) {
   const [expanded, setExpanded] = useState(true);
-  const isSelected = selectedPath === node.selectPath;
+  const isSelected = normalizeFolderPath(selectedPath ?? "") === node.path;
   const hasChildren = node.children.length > 0;
 
   return (

@@ -7,9 +7,11 @@ from app.infrastructure.db.repositories.sessions_repository import SessionsRepos
 from app.scanner.scan import scan_folder, scan_folder_files
 from app.scanner.scan_pc import iter_pc_images
 from app.settings import load_settings
+from app.shared.logging import get_logger
 from app.shared.utils import now_ms
 
 _registered = False
+logger = get_logger("jobs.registry")
 
 
 def ensure_jobs_registered():
@@ -71,3 +73,44 @@ def ensure_jobs_registered():
     job_queue.register("scan_folder", scan_folder_job)
     job_queue.register("scan_pc", scan_pc_job)
     _registered = True
+
+
+def recover_running_sessions():
+    ensure_jobs_registered()
+
+    with get_db() as conn:
+        sessions = SessionsRepository(conn).get_running()
+
+    for session in sessions:
+        if session["folder"] == "This PC":
+            job = job_queue.enqueue("scan_pc", {"session_id": session["id"], "recovered": True})
+        else:
+            target = Path(session["folder"])
+            if not target.exists() or not target.is_dir():
+                logger.warning(
+                    "scan_recovery_missing_folder session_id=%s folder=%s",
+                    session["id"],
+                    session["folder"],
+                )
+                with get_db() as conn:
+                    SessionsRepository(conn).finish_session(
+                        session["id"],
+                        ended_at=now_ms(),
+                        total=session.get("total"),
+                        flagged=session.get("flagged"),
+                        status="failed",
+                    )
+                    conn.commit()
+                continue
+            job = job_queue.enqueue(
+                "scan_folder",
+                {"folder": session["folder"], "session_id": session["id"], "recovered": True},
+            )
+
+        job.meta["recovered"] = True
+        logger.info(
+            "scan_recovered session_id=%s folder=%s job_id=%s",
+            session["id"],
+            session["folder"],
+            job.id,
+        )

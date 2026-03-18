@@ -45,6 +45,28 @@ class SessionsRepository:
             for row in rows
         ]
 
+    def get_running(self):
+        rows = self.conn.execute(
+            """
+            SELECT id, folder, started_at, ended_at, total, flagged, status
+            FROM scan_sessions
+            WHERE status = 'running'
+            ORDER BY started_at ASC
+            """
+        ).fetchall()
+        return [
+            {
+                "id": row[0],
+                "folder": row[1],
+                "started_at": row[2],
+                "ended_at": row[3],
+                "total": row[4],
+                "flagged": row[5],
+                "status": row[6],
+            }
+            for row in rows
+        ]
+
     def get_by_id(self, session_id: int):
         row = self.conn.execute(
             "SELECT id, folder, started_at, ended_at, total, flagged, status FROM scan_sessions WHERE id=?",

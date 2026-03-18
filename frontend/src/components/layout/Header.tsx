@@ -53,7 +53,7 @@ export function Header({ collapsed = false }: { collapsed?: boolean }) {
   return (
     <header
       className="fixed right-0 top-0 z-30 flex h-12 items-center justify-between border-b px-6 backdrop-blur transition-[left] duration-200"
-      style={{ left: collapsed ? "76px" : "240px", background: "color-mix(in srgb, var(--surface-base) 78%, transparent)", borderColor: "var(--line)" }}
+      style={{ left: collapsed ? "84px" : "240px", background: "color-mix(in srgb, var(--surface-base) 78%, transparent)", borderColor: "var(--line)" }}
     >
       <div className="min-w-[180px]">
         <p className="text-[10px] uppercase tracking-[0.24em]" style={{ color: "var(--ink-3)" }}>

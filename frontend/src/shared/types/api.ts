@@ -73,3 +73,12 @@ export interface ResultsResponse {
   total: number;
   items: ScanResult[];
 }
+
+export interface FileMeta {
+  size_bytes: number;
+  modified_at: number;
+  extension: string;
+  mime_type: string | null;
+  width: number | null;
+  height: number | null;
+}

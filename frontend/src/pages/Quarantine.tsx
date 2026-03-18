@@ -21,6 +21,8 @@ export function Quarantine() {
   const { data: settings } = useQuery({ queryKey: ["settings"], queryFn: () => getSettings().then((response) => response.data) });
   const [pendingDeleteIds, setPendingDeleteIds] = useState<number[]>([]);
   const items = quarantine.data?.items ?? [];
+  const expiringSoon = items.filter((item) => daysLeft(item.quarantined_at, settings?.auto_delete_days ?? 30) <= 7);
+  const rest = items.filter((item) => daysLeft(item.quarantined_at, settings?.auto_delete_days ?? 30) > 7);
 
   return (
     <div className="space-y-6">
@@ -50,16 +52,37 @@ export function Quarantine() {
       {items.length === 0 ? (
         <EmptyState title="Quarantine is empty" description="Flagged files moved here will stay available for restore until cleanup." />
       ) : (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-          {items.map((item) => (
-            <QuarantineCard
-              key={item.id}
-              item={item}
-              daysLeft={daysLeft(item.quarantined_at, settings?.auto_delete_days ?? 30)}
-              onRestore={() => restore.mutate([item.id])}
-              onDelete={() => setPendingDeleteIds([item.id])}
-            />
-          ))}
+        <div className="space-y-6">
+          {expiringSoon.length > 0 ? (
+            <section className="space-y-3">
+              <h2 className="text-sm font-semibold text-[var(--red)]">Expiring soon · {expiringSoon.length}</h2>
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+                {expiringSoon.map((item) => (
+                  <QuarantineCard
+                    key={item.id}
+                    item={item}
+                    daysLeft={daysLeft(item.quarantined_at, settings?.auto_delete_days ?? 30)}
+                    onRestore={() => restore.mutate([item.id])}
+                    onDelete={() => setPendingDeleteIds([item.id])}
+                  />
+                ))}
+              </div>
+            </section>
+          ) : null}
+          <section className="space-y-3">
+            <h2 className="text-sm font-semibold text-[var(--ink-1)]">Holding bay</h2>
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+              {rest.map((item) => (
+                <QuarantineCard
+                  key={item.id}
+                  item={item}
+                  daysLeft={daysLeft(item.quarantined_at, settings?.auto_delete_days ?? 30)}
+                  onRestore={() => restore.mutate([item.id])}
+                  onDelete={() => setPendingDeleteIds([item.id])}
+                />
+              ))}
+            </div>
+          </section>
         </div>
       )}
 

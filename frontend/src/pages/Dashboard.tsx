@@ -3,8 +3,9 @@ import { AlertTriangle, ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { exportCsvUrl, getFolders, getStats } from "@/api/client";
+import { StatCard } from "@/components/dashboard/StatCard";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { EmptyState, StatPill } from "@/components/ui";
+import { EmptyState } from "@/components/ui";
 import { formatTimeAgo } from "@/shared/lib/format";
 import { queryKeys } from "@/shared/lib/queryKeys";
 
@@ -40,9 +41,9 @@ export function Dashboard() {
         }
       />
 
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {statCards.map(({ label, value, color, to }) => (
-          <StatPill key={label} label={label} value={value} color={color} to={to} />
+          <StatCard key={label} label={label} value={value} color={color} to={to} urgent={label === "Explicit" && value > 0} />
         ))}
       </div>
 

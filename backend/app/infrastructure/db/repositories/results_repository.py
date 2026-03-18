@@ -2,6 +2,17 @@ class ResultsRepository:
     def __init__(self, conn):
         self.conn = conn
 
+    def _latest_result_join(self) -> str:
+        return """
+            JOIN results r ON r.id = (
+                SELECT r2.id
+                FROM results r2
+                WHERE r2.file_id = f.id
+                ORDER BY r2.created_at DESC, r2.id DESC
+                LIMIT 1
+            )
+        """
+
     def insert_many(self, records: list[dict]):
         self.conn.executemany(
             """
@@ -36,12 +47,17 @@ class ResultsRepository:
             (*file_ids, classes),
         )
 
-    def get_latest_results(self, *, decision=None, folder=None, status="active", limit=100, offset=0, search=None):
-        filters = ["r.decision != 'safe'"]
+    def get_latest_results(self, *, decision=None, folder=None, status="active", limit=100, offset=0, search=None, include_safe=False, rescued_only=False):
+        filters = []
         params: list[object] = []
+        if not include_safe and decision != "safe":
+            filters.append("r.decision != 'safe'")
         if decision:
             filters.append("r.decision = ?")
             params.append(decision)
+        if rescued_only:
+            filters.append("r.classes = ?")
+            params.append("USER_RESCUED")
         if folder:
             filters.append("f.folder = ?")
             params.append(folder)
@@ -51,18 +67,13 @@ class ResultsRepository:
         if search:
             filters.append("LOWER(f.path) LIKE ?")
             params.append(f"%{search.lower()}%")
-        where = " AND ".join(filters)
+        where = " AND ".join(filters) if filters else "1=1"
         rows = self.conn.execute(
             f"""
             SELECT f.id, f.path, f.folder, f.status, f.quarantined_at, f.type, f.frame_count, f.duration,
                    r.decision, r.score, r.classes, r.created_at, r.avg_score, r.max_score
-            FROM (
-                SELECT file_id, MAX(created_at) AS created_at
-                FROM results
-                GROUP BY file_id
-            ) latest
-            JOIN results r ON r.file_id = latest.file_id AND r.created_at = latest.created_at
-            JOIN files f ON r.file_id = f.id
+            FROM files f
+            {self._latest_result_join()}
             WHERE {where}
             ORDER BY r.score DESC
             LIMIT ? OFFSET ?
@@ -74,13 +85,8 @@ class ResultsRepository:
             SELECT COUNT(*)
             FROM (
                 SELECT f.id
-                FROM (
-                    SELECT file_id, MAX(created_at) AS created_at
-                    FROM results
-                    GROUP BY file_id
-                ) latest
-                JOIN results r ON r.file_id = latest.file_id AND r.created_at = latest.created_at
-                JOIN files f ON r.file_id = f.id
+                FROM files f
+                {self._latest_result_join()}
                 WHERE {where}
             )
             """,
@@ -111,9 +117,14 @@ class ResultsRepository:
         rows = self.conn.execute(
             """
             SELECT r.decision, COUNT(*) AS cnt
-            FROM (SELECT file_id, MAX(created_at) AS ca FROM results GROUP BY file_id) latest
-            JOIN results r ON r.file_id = latest.file_id AND r.created_at = latest.ca
-            JOIN files f ON f.id = r.file_id
+            FROM files f
+            JOIN results r ON r.id = (
+                SELECT r2.id
+                FROM results r2
+                WHERE r2.file_id = f.id
+                ORDER BY r2.created_at DESC, r2.id DESC
+                LIMIT 1
+            )
             WHERE f.status = 'active' AND r.decision != 'safe'
             GROUP BY r.decision
             """
@@ -157,13 +168,14 @@ class ResultsRepository:
         rows = self.conn.execute(
             """
             SELECT r.decision, COUNT(*) AS cnt
-            FROM (
-                SELECT file_id, MAX(created_at) AS created_at
-                FROM results
-                GROUP BY file_id
-            ) latest
-            JOIN results r ON r.file_id = latest.file_id AND r.created_at = latest.created_at
-            JOIN files f ON f.id = r.file_id
+            FROM files f
+            JOIN results r ON r.id = (
+                SELECT r2.id
+                FROM results r2
+                WHERE r2.file_id = f.id
+                ORDER BY r2.created_at DESC, r2.id DESC
+                LIMIT 1
+            )
             WHERE f.status = 'active'
             GROUP BY r.decision
             """
