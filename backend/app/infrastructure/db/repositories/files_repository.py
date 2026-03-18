@@ -12,6 +12,7 @@ class FilesRepository:
         rows = self.conn.execute(
             f"""
             SELECT id, path, status, mtime, fingerprint, hash, folder, quarantined_at, type, frame_count, duration
+                 , phash
             FROM files
             WHERE path IN ({placeholders})
             """,
@@ -30,6 +31,7 @@ class FilesRepository:
                 "type": row[8],
                 "frame_count": row[9],
                 "duration": row[10],
+                "phash": row[11],
             }
             for row in rows
         }
@@ -37,7 +39,7 @@ class FilesRepository:
     def get_by_id(self, file_id: int):
         row = self.conn.execute(
             """
-            SELECT id, path, folder, status, quarantined_at, hash, type, frame_count, duration
+            SELECT id, path, folder, status, quarantined_at, hash, type, frame_count, duration, phash
             FROM files
             WHERE id = ?
             """,
@@ -55,13 +57,14 @@ class FilesRepository:
             "type": row[6],
             "frame_count": row[7],
             "duration": row[8],
+            "phash": row[9],
         }
 
     def upsert_many(self, records: list[dict]):
         self.conn.executemany(
             """
-            INSERT INTO files (path, size, mtime, hash, folder, status, last_scanned_at, deleted_at, type, frame_count, duration, fingerprint)
-            VALUES (:path, :size, :mtime, :hash, :folder, 'active', :last_scanned_at, NULL, :type, :frame_count, :duration, :fingerprint)
+            INSERT INTO files (path, size, mtime, hash, folder, status, last_scanned_at, deleted_at, type, frame_count, duration, fingerprint, phash)
+            VALUES (:path, :size, :mtime, :hash, :folder, 'active', :last_scanned_at, NULL, :type, :frame_count, :duration, :fingerprint, :phash)
             ON CONFLICT(path) DO UPDATE SET
                 size=excluded.size,
                 mtime=excluded.mtime,
@@ -73,7 +76,8 @@ class FilesRepository:
                 type=excluded.type,
                 frame_count=excluded.frame_count,
                 duration=excluded.duration,
-                fingerprint=excluded.fingerprint
+                fingerprint=excluded.fingerprint,
+                phash=excluded.phash
             """,
             records,
         )

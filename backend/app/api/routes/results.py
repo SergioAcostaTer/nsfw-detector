@@ -24,12 +24,21 @@ def get_results(
     folder: Optional[str] = Query(None),
     status: Optional[str] = Query("active"),
     q: Optional[str] = Query(None),
+    sort_by: Optional[str] = Query("score_desc"),
     limit: int = Query(100),
     offset: int = Query(0),
 ):
     with get_db() as conn:
         repo = ResultsRepository(conn)
-        return repo.get_latest_results(decision=decision, folder=folder, status=status, search=q, limit=limit, offset=offset)
+        return repo.get_latest_results(
+            decision=decision,
+            folder=folder,
+            status=status,
+            search=q,
+            sort_by=sort_by,
+            limit=limit,
+            offset=offset,
+        )
 
 
 @router.get("/results/safe")
@@ -67,12 +76,25 @@ def rescue_results(req: ActionRequest):
         files_repo = FilesRepository(conn)
         results_repo = ResultsRepository(conn)
         valid_ids = []
+        target_phashes: list[str] = []
         for file_id in req.file_ids:
             record = files_repo.get_by_id(file_id)
             if record is None or record["status"] != "active":
                 continue
             valid_ids.append(file_id)
+            if record.get("phash"):
+                target_phashes.append(record["phash"])
             rescued.append({"id": file_id, "path": record["path"]})
+        if target_phashes:
+            unique_phashes = list(dict.fromkeys(target_phashes))
+            placeholders = ",".join("?" for _ in unique_phashes)
+            duplicate_rows = conn.execute(
+                f"SELECT id FROM files WHERE phash IN ({placeholders}) AND status = 'active'",
+                unique_phashes,
+            ).fetchall()
+            for row in duplicate_rows:
+                if row[0] not in valid_ids:
+                    valid_ids.append(row[0])
         results_repo.insert_safe_overrides(valid_ids, created_at=now_ms())
         conn.commit()
     return {"rescued": rescued}

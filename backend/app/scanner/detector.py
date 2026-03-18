@@ -41,7 +41,18 @@ class Detector:
         self.preprocess_pool = ThreadPoolExecutor(max_workers=4)
 
     def preprocess(self, image):
-        img = cv2.resize(image, (320, 320))
+        old_size = image.shape[:2]
+        ratio = float(320) / max(old_size)
+        new_size = tuple(int(value * ratio) for value in old_size)
+
+        img = cv2.resize(image, (new_size[1], new_size[0]))
+
+        delta_w = 320 - new_size[1]
+        delta_h = 320 - new_size[0]
+        top, bottom = delta_h // 2, delta_h - (delta_h // 2)
+        left, right = delta_w // 2, delta_w - (delta_w // 2)
+
+        img = cv2.copyMakeBorder(img, top, bottom, left, right, cv2.BORDER_CONSTANT, value=[0, 0, 0])
         img = img.astype(np.float32) / 255.0
         img = np.transpose(img, (2, 0, 1))
         return img

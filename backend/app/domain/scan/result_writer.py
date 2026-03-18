@@ -18,6 +18,7 @@ def persist_scan_results(conn, *, folder, records: list[dict]):
                 "frame_count": record.get("frame_count", 0),
                 "duration": record.get("duration", 0.0),
                 "fingerprint": record["entry"]["fingerprint"],
+                "phash": record["entry"].get("phash", ""),
             }
             for record in records
         ]

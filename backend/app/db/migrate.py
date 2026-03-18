@@ -12,6 +12,7 @@ def run_migrations(conn):
         "frame_count": "INTEGER DEFAULT 0",
         "duration": "REAL DEFAULT 0",
         "fingerprint": "TEXT",
+        "phash": "TEXT",
     }
     for col, definition in new_cols.items():
         if col in existing_cols:
@@ -35,7 +36,7 @@ def run_migrations(conn):
                 ended_at   INTEGER,
                 total      INTEGER DEFAULT 0,
                 flagged    INTEGER DEFAULT 0,
-                status     TEXT DEFAULT 'running'
+                status     TEXT DEFAULT 'pending'
             )
             """
         )
@@ -61,4 +62,5 @@ def run_migrations(conn):
             print(f"Migration error adding results.{col}: {exc}")
 
     conn.execute("CREATE INDEX IF NOT EXISTS idx_files_hash ON files(hash)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_files_phash ON files(phash)")
     conn.commit()

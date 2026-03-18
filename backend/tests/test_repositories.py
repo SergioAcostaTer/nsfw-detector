@@ -35,6 +35,7 @@ class RepositoryTests(unittest.TestCase):
                         "frame_count": 0,
                         "duration": 0.0,
                         "fingerprint": "1-1",
+                        "phash": "abc123",
                     }
                 ]
             )
@@ -52,9 +53,9 @@ class RepositoryTests(unittest.TestCase):
                     }
                 ]
             )
-            sessions_repo.finish_session(session_id, ended_at=3, total=1, flagged=1, status="done")
+            sessions_repo.finish_session(session_id, ended_at=3, total=1, flagged=1, status="completed")
             conn.commit()
 
             self.assertEqual(results_repo.get_result_counts()["explicit"], 1)
-            self.assertEqual(sessions_repo.get_recent(1)[0]["status"], "done")
+            self.assertEqual(sessions_repo.get_recent(1)[0]["status"], "completed")
             conn.close()

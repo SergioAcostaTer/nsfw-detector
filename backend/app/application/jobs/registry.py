@@ -19,11 +19,6 @@ def ensure_jobs_registered():
     if _registered:
         return
 
-    def _finish_session(session_id: int, *, status: str, total: int | None = None, flagged: int | None = None):
-        with get_db() as conn:
-            SessionsRepository(conn).finish_session(session_id, ended_at=now_ms(), total=total, flagged=flagged, status=status)
-            conn.commit()
-
     def scan_folder_job(job):
         target = Path(job.payload["folder"])
         scan_mode = job.payload.get("scan_mode", "images")
@@ -46,8 +41,6 @@ def ensure_jobs_registered():
             cancel_event=cancel_event,
             scan_mode=scan_mode,
         )
-        if result["status"] == "cancelled":
-            _finish_session(job.payload["session_id"], status="cancelled", total=result["total"], flagged=result["flagged"])
         return result
 
     def scan_pc_job(job):
@@ -82,8 +75,6 @@ def ensure_jobs_registered():
             batch_size=settings.get("batch_size", 8),
             video_fps=settings.get("video_fps", 1.0),
         )
-        if result["status"] == "cancelled":
-            _finish_session(job.payload["session_id"], status="cancelled", total=result["total"], flagged=result["flagged"])
         return result
 
     job_queue.register("scan_folder", scan_folder_job)
@@ -96,45 +87,29 @@ def recover_running_sessions():
 
     with get_db() as conn:
         sessions = SessionsRepository(conn).get_running()
-
-    for session in sessions:
-        if session["folder"] == "This PC":
-            job = job_queue.enqueue(
-                "scan_pc",
-                {"session_id": session["id"], "scan_mode": session.get("scan_mode", "images"), "recovered": True},
-            )
-        else:
-            target = Path(session["folder"])
-            if not target.exists() or not target.is_dir():
-                logger.warning(
-                    "scan_recovery_missing_folder session_id=%s folder=%s",
-                    session["id"],
-                    session["folder"],
-                )
-                with get_db() as conn:
-                    SessionsRepository(conn).finish_session(
+        sessions_repo = SessionsRepository(conn)
+        for session in sessions:
+            if session["folder"] != "This PC":
+                target = Path(session["folder"])
+                if not target.exists() or not target.is_dir():
+                    logger.warning(
+                        "scan_recovery_missing_folder session_id=%s folder=%s",
+                        session["id"],
+                        session["folder"],
+                    )
+                    sessions_repo.finish_session(
                         session["id"],
                         ended_at=now_ms(),
                         total=session.get("total"),
                         flagged=session.get("flagged"),
                         status="failed",
                     )
-                    conn.commit()
-                continue
-            job = job_queue.enqueue(
-                "scan_folder",
-                {
-                    "folder": session["folder"],
-                    "session_id": session["id"],
-                    "scan_mode": session.get("scan_mode", "images"),
-                    "recovered": True,
-                },
-            )
+                    continue
 
-        job.meta["recovered"] = True
-        logger.info(
-            "scan_recovered session_id=%s folder=%s job_id=%s",
-            session["id"],
-            session["folder"],
-            job.id,
-        )
+            sessions_repo.set_status(session["id"], "pending")
+            logger.info(
+                "scan_requeued session_id=%s folder=%s",
+                session["id"],
+                session["folder"],
+            )
+        conn.commit()

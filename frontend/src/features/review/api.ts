@@ -6,6 +6,7 @@ export const getResults = (params?: {
   folder?: string;
   status?: string;
   q?: string;
+  sort_by?: string;
   limit?: number;
   offset?: number;
 }) => api.get<ResultsResponse>("/results", { params });

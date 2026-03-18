@@ -1,11 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Command, Search } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
-import { getResults, getScanStatus, thumbnailUrl } from "@/api/client";
+import { getResults, thumbnailUrl } from "@/api/client";
 import { appStore } from "@/app/store";
 import { Badge, Kbd, ProgressBar } from "@/components/ui";
+import { useScanStatus } from "@/hooks/useScanStatus";
 import { filenameFromPath } from "@/shared/lib/format";
 import { queryKeys } from "@/shared/lib/queryKeys";
 
@@ -16,11 +17,7 @@ export function Header({ collapsed = false }: { collapsed?: boolean }) {
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [focused, setFocused] = useState(false);
-  const { data: status } = useQuery({
-    queryKey: queryKeys.scanStatus(),
-    queryFn: () => getScanStatus().then((response) => response.data),
-    refetchInterval: (query) => (query.state.data?.running ? 1000 : false),
-  });
+  const { data: status } = useScanStatus();
   const { data: searchable } = useQuery({
     queryKey: queryKeys.headerSearch(debouncedQuery),
     queryFn: () => getResults({ status: "active", q: debouncedQuery, limit: 8 }).then((response) => response.data),

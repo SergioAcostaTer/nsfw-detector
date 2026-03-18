@@ -1,6 +1,12 @@
 import hashlib
 from pathlib import Path
 
+try:
+    import imagehash
+except ImportError:  # pragma: no cover - optional until dependencies are installed
+    imagehash = None
+from PIL import Image
+
 from app.config import IMAGE_EXTENSIONS, VIDEO_EXTENSIONS
 
 
@@ -32,3 +38,13 @@ def hash_file(path: Path):
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def calculate_phash(path: Path) -> str:
+    if imagehash is None:
+        return ""
+    try:
+        with Image.open(path) as img:
+            return str(imagehash.phash(img))
+    except Exception:
+        return ""

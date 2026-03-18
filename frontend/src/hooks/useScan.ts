@@ -3,6 +3,7 @@ import { useEffect, useRef } from "react";
 
 import { cancelScan, getScanStatus, startPcScan, startScan } from "@/api/client";
 import { toast } from "@/components/ui";
+import { setScanStatusCache } from "@/hooks/useScanStatus";
 import { queryKeys } from "@/shared/lib/queryKeys";
 import type { ScanMode } from "@/shared/types/api";
 
@@ -22,7 +23,7 @@ export function useScan(folder: string, scanMode: ScanMode) {
   const start = useMutation({
     mutationFn: () => startScan(folder, scanMode),
     onMutate: () => {
-      queryClient.setQueryData(queryKeys.scanStatus(), {
+      setScanStatusCache(queryClient, {
         running: true,
         progress: 0,
         total: 0,
@@ -33,7 +34,7 @@ export function useScan(folder: string, scanMode: ScanMode) {
       });
     },
     onSuccess: (response) => {
-      queryClient.setQueryData(queryKeys.scanStatus(), {
+      setScanStatusCache(queryClient, {
         running: true,
         progress: 0,
         total: 0,
@@ -51,7 +52,7 @@ export function useScan(folder: string, scanMode: ScanMode) {
   const startPc = useMutation({
     mutationFn: () => startPcScan(scanMode),
     onMutate: () => {
-      queryClient.setQueryData(queryKeys.scanStatus(), {
+      setScanStatusCache(queryClient, {
         running: true,
         progress: 0,
         total: 0,
@@ -62,7 +63,7 @@ export function useScan(folder: string, scanMode: ScanMode) {
       });
     },
     onSuccess: (response) => {
-      queryClient.setQueryData(queryKeys.scanStatus(), {
+      setScanStatusCache(queryClient, {
         running: true,
         progress: 0,
         total: 0,
@@ -80,12 +81,15 @@ export function useScan(folder: string, scanMode: ScanMode) {
   const cancel = useMutation({
     mutationFn: () => cancelScan(status.data?.job_id),
     onSuccess: () => {
-      queryClient.setQueryData(queryKeys.scanStatus(), (current: Record<string, unknown> | undefined) => ({
-        ...(current ?? {}),
+      setScanStatusCache(queryClient, {
         running: false,
-        status: "cancelled",
+        progress: status.data?.progress ?? 0,
+        total: status.data?.total ?? 0,
+        flagged: status.data?.flagged ?? 0,
         current_file: "",
-      }));
+        job_id: status.data?.job_id ?? null,
+        status: "cancelled",
+      });
       toast({ title: "Scan cancelled" });
       invalidate(status.data?.job_id);
     },
@@ -95,7 +99,6 @@ export function useScan(folder: string, scanMode: ScanMode) {
   const status = useQuery({
     queryKey: queryKeys.scanStatus(),
     queryFn: () => getScanStatus().then((response) => response.data),
-    refetchInterval: (query) => (query.state.data?.running ? 1000 : false),
   });
 
   useEffect(() => {

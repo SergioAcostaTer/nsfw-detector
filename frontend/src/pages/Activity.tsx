@@ -10,7 +10,8 @@ import { formatDuration, formatTimeAgo } from "@/shared/lib/format";
 import { queryKeys } from "@/shared/lib/queryKeys";
 
 const STATUS_STYLES: Record<string, { bg: string; color: string }> = {
-  done: { bg: "var(--green-dim)", color: "var(--green)" },
+  completed: { bg: "var(--green-dim)", color: "var(--green)" },
+  pending: { bg: "var(--violet-dim)", color: "var(--violet)" },
   running: { bg: "var(--blue-dim)", color: "var(--blue)" },
   failed: { bg: "var(--red-dim)", color: "var(--red)" },
   cancelled: { bg: "var(--amber-dim)", color: "var(--amber)" },

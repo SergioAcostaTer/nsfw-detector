@@ -1,21 +1,28 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { deleteFiles, getResults, getResultsCount, quarantineFiles } from "@/api/client";
 import { toast } from "@/components/ui";
 import { queryKeys } from "@/shared/lib/queryKeys";
 
-export function useResults(filter: string, page: number, pageSize: number) {
+export function useResults(filter: string, folder: string | null, sortBy: string = "score_desc", pageSize: number = 60) {
   const queryClient = useQueryClient();
 
-  const results = useQuery({
-    queryKey: queryKeys.results(filter, page, pageSize),
-    queryFn: () =>
+  const resultsQuery = useInfiniteQuery({
+    queryKey: ["results", filter, folder, sortBy],
+    initialPageParam: 0,
+    queryFn: ({ pageParam = 0 }) =>
       getResults({
         decision: filter !== "all" ? filter : undefined,
+        folder: folder ?? undefined,
         status: "active",
+        sort_by: sortBy,
         limit: pageSize,
-        offset: page * pageSize,
+        offset: pageParam * pageSize,
       }).then((response) => response.data),
+    getNextPageParam: (lastPage, allPages) => {
+      const loadedItemCount = allPages.reduce((sum, page) => sum + page.items.length, 0);
+      return loadedItemCount < lastPage.total ? allPages.length : undefined;
+    },
   });
 
   const counts = useQuery({
@@ -48,5 +55,8 @@ export function useResults(filter: string, page: number, pageSize: number) {
     onError: () => toast({ title: "Failed to delete files", variant: "error" }),
   });
 
-  return { results, counts, quarantine, remove };
+  const items = resultsQuery.data?.pages.flatMap((page) => page.items) ?? [];
+  const total = resultsQuery.data?.pages[0]?.total ?? 0;
+
+  return { resultsQuery, items, total, counts, quarantine, remove };
 }

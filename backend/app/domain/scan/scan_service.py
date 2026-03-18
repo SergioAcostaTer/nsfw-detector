@@ -52,7 +52,7 @@ def scan_folder_files(
         batch_size = 1
 
     tracker = ProgressTracker(total=len(files), callback=progress_callback)
-    status = "done"
+    status = "completed"
 
     with get_db() as conn:
         init_db(conn)
@@ -78,7 +78,8 @@ def scan_folder_files(
                     if existing and existing["status"] in ("quarantined", "deleted"):
                         tracker.increment(current_file=current_file)
                         continue
-                    identity = build_file_identity(path, existing)
+                    media_type = media_type_for_path(path)
+                    identity = build_file_identity(path, existing, media_type=media_type)
                     if existing and existing.get("fingerprint") == identity["fingerprint"]:
                         tracker.increment(current_file=current_file)
                         continue
@@ -86,10 +87,11 @@ def scan_folder_files(
                     entry = {
                         "index": item["index"],
                         "path": path,
-                        "media_type": media_type_for_path(path),
+                        "media_type": media_type,
                         "stat": identity["stat"],
                         "fingerprint": identity["fingerprint"],
                         "hash": identity["hash"],
+                        "phash": identity.get("phash", ""),
                     }
                     if entry["media_type"] == "image":
                         image_entries.append(entry)
@@ -200,7 +202,7 @@ def scan_folder_files(
         metrics.total_ms,
         metrics.files_per_second,
     )
-    return {"total": tracker.total, "flagged": tracker.flagged, "status": status, "progress": 100 if status == "done" else 0}
+    return {"total": tracker.total, "flagged": tracker.flagged, "status": status, "progress": 100 if status == "completed" else 0}
 
 
 def scan_folder(

@@ -38,7 +38,6 @@ export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
   const { data: scanStatus } = useQuery({
     queryKey: queryKeys.scanStatus(),
     queryFn: () => getScanStatus().then((response) => response.data),
-    refetchInterval: (query) => (query.state.data?.running ? 1000 : false),
   });
 
   const reviewCount = (counts?.explicit ?? 0) + (counts?.borderline ?? 0);

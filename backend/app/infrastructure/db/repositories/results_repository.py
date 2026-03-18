@@ -47,7 +47,19 @@ class ResultsRepository:
             (*file_ids, classes),
         )
 
-    def get_latest_results(self, *, decision=None, folder=None, status="active", limit=100, offset=0, search=None, include_safe=False, rescued_only=False):
+    def get_latest_results(
+        self,
+        *,
+        decision=None,
+        folder=None,
+        status="active",
+        sort_by="score_desc",
+        limit=100,
+        offset=0,
+        search=None,
+        include_safe=False,
+        rescued_only=False,
+    ):
         filters = []
         params: list[object] = []
         if not include_safe and decision != "safe":
@@ -68,6 +80,15 @@ class ResultsRepository:
             filters.append("LOWER(f.path) LIKE ?")
             params.append(f"%{search.lower()}%")
         where = " AND ".join(filters) if filters else "1=1"
+        sort_map = {
+            "score_desc": "r.score DESC, r.created_at DESC",
+            "score_asc": "r.score ASC, r.created_at DESC",
+            "date_desc": "f.mtime DESC, r.id DESC",
+            "date_asc": "f.mtime ASC, r.id ASC",
+            "name_asc": "f.path ASC",
+            "name_desc": "f.path DESC",
+        }
+        order_clause = sort_map.get(sort_by, "r.score DESC, r.created_at DESC")
         rows = self.conn.execute(
             f"""
             SELECT f.id, f.path, f.folder, f.status, f.quarantined_at, f.type, f.frame_count, f.duration,
@@ -75,7 +96,7 @@ class ResultsRepository:
             FROM files f
             {self._latest_result_join()}
             WHERE {where}
-            ORDER BY r.score DESC
+            ORDER BY {order_clause}
             LIMIT ? OFFSET ?
             """,
             (*params, limit, offset),

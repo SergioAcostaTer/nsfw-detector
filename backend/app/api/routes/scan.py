@@ -1,7 +1,20 @@
+import asyncio
 from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import StreamingResponse
+
+try:
+    from sse_starlette.sse import EventSourceResponse
+except ImportError:  # pragma: no cover - fallback for environments without the optional dependency
+    class EventSourceResponse(StreamingResponse):
+        def __init__(self, content, *args, **kwargs):
+            async def _encode():
+                async for chunk in content:
+                    yield f"data: {chunk}\n\n"
+
+            super().__init__(_encode(), media_type="text/event-stream", *args, **kwargs)
 
 from app.api.schemas import PCScanRequest, ScanRequest, ScanStatusResponse
 from app.application.jobs.queue import job_queue
@@ -32,8 +45,7 @@ def start_scan(req: ScanRequest):
     target = Path(req.folder)
     if not target.exists() or not target.is_dir():
         raise HTTPException(status_code=400, detail="Invalid directory path")
-    latest = job_queue.latest()
-    if latest and latest.status in {"pending", "running"}:
+    if job_queue.has_active_jobs():
         raise HTTPException(status_code=409, detail="Scan already in progress")
     with get_db() as conn:
         session_id = SessionsRepository(conn).create_session(str(target), job_queue.clock(), req.scan_mode)
@@ -45,8 +57,7 @@ def start_scan(req: ScanRequest):
 @router.post("/scan/pc")
 def start_pc_scan(req: PCScanRequest | None = None):
     ensure_jobs_registered()
-    latest = job_queue.latest()
-    if latest and latest.status in {"pending", "running"}:
+    if job_queue.has_active_jobs():
         raise HTTPException(status_code=409, detail="Scan already in progress")
     scan_mode = req.scan_mode if req else "images"
     with get_db() as conn:
@@ -73,3 +84,27 @@ def cancel_scan(job_id: Optional[str] = Query(None)):
 def scan_status(job_id: Optional[str] = Query(None)):
     ensure_jobs_registered()
     return _job_to_scan_status(job_queue.get(job_id) if job_id else job_queue.latest())
+
+
+@router.get("/scan/stream")
+async def scan_status_stream(job_id: Optional[str] = Query(None)):
+    ensure_jobs_registered()
+
+    async def event_generator():
+        last_progress = -1
+        last_status = None
+        while True:
+            target_job = job_queue.get(job_id) if job_id else job_queue.latest()
+            status_obj = _job_to_scan_status(target_job)
+
+            if status_obj.progress != last_progress or status_obj.status != last_status:
+                last_progress = status_obj.progress
+                last_status = status_obj.status
+                yield status_obj.model_dump_json()
+
+            if status_obj.status in {"completed", "cancelled", "failed", "idle"}:
+                break
+
+            await asyncio.sleep(0.5)
+
+    return EventSourceResponse(event_generator())

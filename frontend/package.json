@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@tanstack/react-query": "^5.59.20",
+    "@tanstack/react-virtual": "^3.13.23",
     "axios": "^1.7.7",
     "lucide-react": "^0.468.0",
     "react": "^18.3.1",
@@ -19,17 +20,17 @@
     "react-router-dom": "^6.28.0"
   },
   "devDependencies": {
+    "@eslint/js": "^9.22.0",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.3",
     "autoprefixer": "^10.4.20",
-    "@eslint/js": "^9.22.0",
     "eslint": "^9.22.0",
     "postcss": "^8.4.49",
     "prettier": "^3.5.3",
     "tailwindcss": "^3.4.15",
-    "typescript-eslint": "^8.26.1",
     "typescript": "^5.6.3",
+    "typescript-eslint": "^8.26.1",
     "vite": "^5.4.11"
   }
 }

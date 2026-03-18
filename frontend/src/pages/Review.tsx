@@ -1,4 +1,5 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { InfiniteData } from "@tanstack/react-query";
 import type { MouseEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { CheckCircle, ListChecks } from "lucide-react";
@@ -8,7 +9,6 @@ import { appStore, useAppStore, type ReviewFilter } from "@/app/store";
 import {
   deleteFiles,
   getFolders,
-  getResults,
   getSafeResults,
   quarantineFiles,
   rescueFiles,
@@ -19,15 +19,15 @@ import {
   unrescueFiles,
 } from "@/api/client";
 import { ConfirmDialog, DragHandle, EmptyState, Kbd, SkeletonGrid, toast } from "@/components/ui";
+import { ReviewToolbar } from "@/components/review/ReviewToolbar";
 import { FileDetailsPane } from "@/features/review/components/FileDetailsPane";
 import { FileGrid } from "@/features/review/components/FileGrid";
 import { FileListView } from "@/features/review/components/FileListView";
 import { FileToolbar } from "@/features/review/components/FileToolbar";
 import { FolderExplorer, buildExplorerTree } from "@/features/review/components/FolderExplorer";
 import { usePanelResize } from "@/features/review/hooks/usePanelResize";
+import { useResults } from "@/hooks/useResults";
 import { queryKeys } from "@/shared/lib/queryKeys";
-
-const FILTERS: ReviewFilter[] = ["all", "explicit", "borderline", "safe"];
 
 function normalizePath(path: string) {
   return path.replace(/\\/g, "/");
@@ -63,6 +63,7 @@ export function Review() {
 
   const [view, setView] = useState<"grid" | "list">(() => (localStorage.getItem("nsfw-review-view") === "list" ? "list" : "grid"));
   const [gridCols, setGridCols] = useState<number>(() => Number(localStorage.getItem("nsfw-grid-cols") ?? 4));
+  const [sortBy, setSortBy] = useState<string>("score_desc");
   const [completedFolders, setCompletedFolders] = useState<Set<string>>(new Set());
   const [pendingDeleteIds, setPendingDeleteIds] = useState<number[]>([]);
   const [pendingIds, setPendingIds] = useState<Set<number>>(new Set());
@@ -119,30 +120,36 @@ export function Review() {
   }, [activeFolder, folderMap, folderSummaries]);
 
   const selectedFolderPath = activeFolder ? folderMap[activeFolder] ?? null : null;
+  const flaggedResults = useResults(safeMode ? "all" : storeFilter, selectedFolderPath, sortBy, 60);
 
-  const itemsQuery = useQuery({
-    queryKey: safeMode ? queryKeys.safeFiles(selectedFolderPath) : queryKeys.reviewFolder(storeFilter, selectedFolderPath),
+  const safeItemsQuery = useInfiniteQuery({
+    queryKey: queryKeys.safeFiles(selectedFolderPath),
     enabled: Boolean(selectedFolderPath),
-    queryFn: () =>
-      (safeMode
-        ? getSafeResults({ folder: selectedFolderPath ?? undefined, status: "active", limit: 1000 })
-        : getResults({
-            decision: storeFilter !== "all" ? storeFilter : undefined,
-            folder: selectedFolderPath ?? undefined,
-            status: "active",
-            limit: 1000,
-          })
-      ).then((response) => response.data),
+    initialPageParam: 0,
+    queryFn: ({ pageParam = 0 }) =>
+      getSafeResults({
+        folder: selectedFolderPath ?? undefined,
+        status: "active",
+        limit: 60,
+        offset: pageParam * 60,
+      }).then((response) => response.data),
+    getNextPageParam: (lastPage, allPages) => {
+      const loaded = allPages.reduce((acc, page) => acc + page.items.length, 0);
+      return loaded < lastPage.total ? allPages.length : undefined;
+    },
   });
 
-  const items = itemsQuery.data?.items ?? [];
+  const itemsQuery = safeMode ? safeItemsQuery : flaggedResults.resultsQuery;
+  const items = safeMode
+    ? safeItemsQuery.data?.pages.flatMap((page) => page.items) ?? []
+    : flaggedResults.items;
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const rescuedIds = useMemo(() => new Set((safeMode ? items : []).map((item) => item.id)), [items, safeMode]);
   const remainingItems = useMemo(() => items.filter((item) => !rescuedIds.has(item.id)), [items, rescuedIds]);
   const treeNodes = useMemo(() => buildExplorerTree(folderSummaries, completedFolders), [completedFolders, folderSummaries]);
   const activeItem = items.find((item) => item.id === lastFocusedId) ?? items.find((item) => selectedSet.has(item.id)) ?? items[0] ?? null;
 
-  const currentQueryKey = safeMode ? queryKeys.safeFiles(selectedFolderPath) : queryKeys.reviewFolder(storeFilter, selectedFolderPath);
+  const currentQueryKey = safeMode ? queryKeys.safeFiles(selectedFolderPath) : (["results", storeFilter, selectedFolderPath, sortBy] as const);
 
   const invalidateMeta = () => {
     queryClient.invalidateQueries({ queryKey: queryKeys.folders });
@@ -155,12 +162,26 @@ export function Review() {
   };
 
   const removeFromCurrentQuery = (ids: number[]) => {
-    queryClient.setQueryData<ResultsResponse | undefined>(currentQueryKey, (current) => {
+    queryClient.setQueryData<InfiniteData<ResultsResponse> | undefined>(currentQueryKey, (current) => {
       if (!current) {
         return current;
       }
-      const nextItems = current.items.filter((item) => !ids.includes(item.id));
-      return { ...current, total: nextItems.length, items: nextItems };
+      const pages = current.pages.map((page) => ({
+        ...page,
+        items: page.items.filter((item) => !ids.includes(item.id)),
+      }));
+      const removed = current.pages.reduce(
+        (sum, page, index) => sum + (page.items.length - pages[index].items.length),
+        0,
+      );
+      if (!pages.length) {
+        return current;
+      }
+      pages[0] = {
+        ...pages[0],
+        total: Math.max(0, pages[0].total - removed),
+      };
+      return { ...current, pages };
     });
   };
 
@@ -195,7 +216,7 @@ export function Review() {
     mutationFn: async (ids: number[]) => rescueFiles(ids),
     onMutate: (ids) => {
       addPending(ids);
-      const snapshot = queryClient.getQueryData(currentQueryKey);
+      const snapshot = queryClient.getQueryData<InfiniteData<ResultsResponse>>(currentQueryKey);
       if (!safeMode) {
         removeFromCurrentQuery(ids);
       }
@@ -221,7 +242,7 @@ export function Review() {
     mutationFn: async (ids: number[]) => unrescueFiles(ids),
     onMutate: (ids) => {
       addPending(ids);
-      const snapshot = queryClient.getQueryData(currentQueryKey);
+      const snapshot = queryClient.getQueryData<InfiniteData<ResultsResponse>>(currentQueryKey);
       if (safeMode) {
         removeFromCurrentQuery(ids);
       }
@@ -247,7 +268,7 @@ export function Review() {
     mutationFn: async (ids: number[]) => quarantineFiles(ids),
     onMutate: (ids) => {
       addPending(ids);
-      const snapshot = queryClient.getQueryData(currentQueryKey);
+      const snapshot = queryClient.getQueryData<InfiniteData<ResultsResponse>>(currentQueryKey);
       removeFromCurrentQuery(ids);
       return { snapshot };
     },
@@ -285,7 +306,7 @@ export function Review() {
     mutationFn: async (ids: number[]) => deleteFiles(ids),
     onMutate: (ids) => {
       addPending(ids);
-      const snapshot = queryClient.getQueryData(currentQueryKey);
+      const snapshot = queryClient.getQueryData<InfiniteData<ResultsResponse>>(currentQueryKey);
       removeFromCurrentQuery(ids);
       return { snapshot };
     },
@@ -493,30 +514,25 @@ export function Review() {
 
       <div className="flex min-w-0 flex-1 flex-col bg-[var(--bg-0)]" onClick={() => appStore.clearSelection()}>
         <div className="border-b px-4 pt-4" style={{ borderColor: "var(--line)" }}>
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-2">
-              {FILTERS.map((entry) => (
-                <button
-                  key={entry}
-                  type="button"
-                  onClick={() => {
-                    appStore.setActiveFilter(entry);
-                    setSearchParams(entry === "all" ? {} : { decision: entry });
-                    appStore.clearSelection();
-                  }}
-                  className={`rounded-full px-3 py-1.5 text-sm font-medium transition ${storeFilter === entry ? "bg-[var(--surface-hover)] text-[var(--text-primary)]" : "bg-transparent text-[var(--text-secondary)] hover:bg-[var(--surface-overlay)]"}`}
-                >
-                  {entry === "all" ? "All" : entry.charAt(0).toUpperCase() + entry.slice(1)}
-                </button>
-              ))}
-            </div>
-            <div className="flex items-center gap-2 text-xs text-[var(--ink-2)]">
-              <span>{items.length} visible</span>
-              <span>·</span>
-              <span>{selectedIds.length} selected</span>
-              <span>·</span>
-              <span>{undoDepth} undo</span>
-            </div>
+          <ReviewToolbar
+            filter={storeFilter}
+            onFilterChange={(entry) => {
+              appStore.setActiveFilter(entry as ReviewFilter);
+              setSearchParams(entry === "all" ? {} : { decision: entry });
+              appStore.clearSelection();
+            }}
+            sortBy={sortBy}
+            onSortChange={setSortBy}
+            counts={flaggedResults.counts.data ?? {}}
+            view={view}
+            onViewChange={setView}
+          />
+          <div className="mb-3 mt-3 flex items-center gap-2 px-2 text-xs text-[var(--ink-2)]">
+            <span>{items.length} visible</span>
+            <span>·</span>
+            <span>{selectedIds.length} selected</span>
+            <span>·</span>
+            <span>{undoDepth} undo</span>
           </div>
         </div>
 
@@ -548,7 +564,7 @@ export function Review() {
           }}
         />
 
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1">
           {itemsQuery.isLoading ? (
             <SkeletonGrid cols={gridCols} />
           ) : folderSummaries.length === 0 ? (
@@ -572,6 +588,9 @@ export function Review() {
               pendingIds={pendingIds}
               gridCols={gridCols}
               safeMode={safeMode}
+              hasNextPage={Boolean(itemsQuery.hasNextPage)}
+              fetchNextPage={() => void itemsQuery.fetchNextPage()}
+              isFetchingNextPage={itemsQuery.isFetchingNextPage}
               onItemClick={handleItemClick}
               onItemDoubleClick={(item) => {
                 appStore.setSelectedIds([item.id]);
