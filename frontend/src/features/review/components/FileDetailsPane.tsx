@@ -48,14 +48,22 @@ export function FileDetailsPane({
 
   return (
     <div className="flex h-full flex-col space-y-6 overflow-y-auto p-4">
-      <div className="aspect-square w-full overflow-hidden rounded-xl border border-[var(--line)] bg-black/10 dark:bg-black/30">
-        <div className="flex h-full w-full items-center justify-center bg-[var(--bg-0)]">
-          {item.type === "video" ? (
-            <video src={imageUrl(item.path)} controls className="h-full w-full object-cover" />
-          ) : (
-            <img src={imageUrl(item.path)} alt="" className="h-full w-full object-cover" />
-          )}
-        </div>
+      <div className="w-full overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--bg-0)] flex items-center justify-center" style={{ minHeight: "55vh" }}>
+        {item.type === "video" ? (
+          <video
+            src={imageUrl(item.path)}
+            controls
+            className="w-full h-full object-contain"
+            style={{ maxHeight: "55vh" }}
+          />
+        ) : (
+          <img
+            src={imageUrl(item.path)}
+            alt=""
+            className="w-full h-full object-contain"
+            style={{ maxHeight: "55vh" }}
+          />
+        )}
       </div>
 
       <div>
