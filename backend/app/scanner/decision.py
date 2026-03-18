@@ -40,15 +40,15 @@ CLASS_WEIGHTS = {
 }
 
 CLASS_THRESHOLDS = {
-    "FEMALE_GENITALIA_EXPOSED": 0.24,
-    "MALE_GENITALIA_EXPOSED": 0.24,
-    "ANUS_EXPOSED": 0.24,
-    "FEMALE_BREAST_EXPOSED": 0.38,
-    "BUTTOCKS_EXPOSED": 0.34,
-    "FEMALE_GENITALIA_COVERED": 0.22,
-    "FEMALE_BREAST_COVERED": 0.26,
-    "BUTTOCKS_COVERED": 0.26,
-    "ANUS_COVERED": 0.24,
+    "FEMALE_GENITALIA_EXPOSED": 0.20,
+    "MALE_GENITALIA_EXPOSED": 0.20,
+    "ANUS_EXPOSED": 0.20,
+    "FEMALE_BREAST_EXPOSED": 0.40,
+    "BUTTOCKS_EXPOSED": 0.40,
+    "FEMALE_GENITALIA_COVERED": 0.80,
+    "FEMALE_BREAST_COVERED": 0.80,
+    "BUTTOCKS_COVERED": 0.80,
+    "ANUS_COVERED": 0.80,
 }
 
 
@@ -75,16 +75,16 @@ def decide(detections, *, explicit_threshold=0.45, borderline_threshold=0.28):
     if len(explicit_hits) >= 2 and max_raw_explicit >= 0.22:
         return "explicit", max_raw_explicit
 
-    if max_raw_explicit >= min(explicit_threshold, 0.28):
+    if max_raw_explicit >= explicit_threshold:
         return "explicit", max_raw_explicit
 
-    if max_sexual >= max(borderline_threshold, 0.24):
+    if max_sexual >= borderline_threshold:
         return "borderline", max_sexual
 
     if len(covered_scores) >= 2 and max_covered >= 0.22:
         return "borderline", max_covered
 
-    if max_covered >= max(borderline_threshold, 0.30):
+    if max_covered >= borderline_threshold + 0.10:
         return "borderline", max_covered
 
     return "safe", 0.0

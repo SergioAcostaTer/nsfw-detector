@@ -10,7 +10,11 @@ class DecisionLogicTests(unittest.TestCase):
         self.assertEqual(score, 0.0)
 
     def test_explicit_signal_is_explicit(self):
-        decision, score = decide([{"class": "MALE_GENITALIA_EXPOSED", "score": 0.41, "weighted_score": 0.41}])
+        decision, score = decide(
+            [{"class": "MALE_GENITALIA_EXPOSED", "score": 0.41, "weighted_score": 0.41}],
+            explicit_threshold=0.40,
+            borderline_threshold=0.28,
+        )
         self.assertEqual(decision, "explicit")
         self.assertGreaterEqual(score, 0.41)
 
@@ -19,12 +23,21 @@ class DecisionLogicTests(unittest.TestCase):
         self.assertEqual(decision, "borderline")
         self.assertGreaterEqual(score, 0.40)
 
-    def test_multiple_covered_signals_are_borderline(self):
+    def test_explicit_threshold_from_ui_is_respected(self):
+        decision, score = decide(
+            [{"class": "MALE_GENITALIA_EXPOSED", "score": 0.41, "weighted_score": 0.41}],
+            explicit_threshold=0.80,
+            borderline_threshold=0.28,
+        )
+        self.assertEqual(decision, "safe")
+        self.assertEqual(score, 0.0)
+
+    def test_covered_signals_do_not_trigger_borderline_under_raised_thresholds(self):
         decision, score = decide(
             [
-                {"class": "FEMALE_BREAST_COVERED", "score": 0.29, "weighted_score": 0.058},
-                {"class": "BUTTOCKS_COVERED", "score": 0.28, "weighted_score": 0.056},
+                {"class": "FEMALE_BREAST_COVERED", "score": 0.65, "weighted_score": 0.13},
+                {"class": "BUTTOCKS_COVERED", "score": 0.64, "weighted_score": 0.128},
             ]
         )
-        self.assertEqual(decision, "borderline")
-        self.assertGreaterEqual(score, 0.28)
+        self.assertEqual(decision, "safe")
+        self.assertEqual(score, 0.0)

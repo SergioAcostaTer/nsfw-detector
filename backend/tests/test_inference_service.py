@@ -31,7 +31,7 @@ class InferenceServiceTests(unittest.TestCase):
         )
 
         with patch("app.domain.scan.inference_service.get_detector", return_value=detector):
-            results = infer_image_batch(loaded_entries, explicit_threshold=0.6, borderline_threshold=0.4)
+            results = infer_image_batch(loaded_entries, explicit_threshold=0.40, borderline_threshold=0.28)
 
         self.assertEqual(detector.seen_images, [image_a, image_b])
         self.assertEqual(results[0]["decision"], "explicit")
