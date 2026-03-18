@@ -1,4 +1,5 @@
-import { Clock, RotateCcw, Trash2 } from "lucide-react";
+import { Check, Clock, RotateCcw, Trash2 } from "lucide-react";
+import type { MouseEvent } from "react";
 
 import { thumbnailUrl, type ScanResult } from "@/api/client";
 
@@ -19,12 +20,18 @@ export function StoredFileCard({
   item,
   daysLeft,
   mode = "trash",
+  isSelected = false,
+  isPending = false,
+  onClick,
   onRestore,
   onDelete,
 }: {
   item: ScanResult;
   daysLeft: number;
   mode?: "trash" | "vault";
+  isSelected?: boolean;
+  isPending?: boolean;
+  onClick?: (event: MouseEvent<HTMLDivElement>) => void;
   onRestore: () => void;
   onDelete: () => void;
 }) {
@@ -33,7 +40,21 @@ export function StoredFileCard({
   const filename = item.path.split(/[\\/]/).pop() ?? item.path;
 
   return (
-    <div className="overflow-hidden rounded-lg" style={{ background: "var(--bg-1)", border: `1px solid ${style.border}`, boxShadow: `0 0 20px ${style.glow}` }}>
+    <div
+      onClick={onClick}
+      className={`group relative overflow-hidden rounded-lg transition-all ${onClick ? "cursor-pointer" : ""} ${isSelected ? "ring-2 ring-blue-500" : ""}`}
+      style={{ background: "var(--bg-1)", border: `1px solid ${isSelected ? "var(--blue)" : style.border}`, boxShadow: `0 0 20px ${style.glow}` }}
+    >
+      <div
+        className={`absolute left-3 top-3 z-20 flex h-5 w-5 items-center justify-center rounded-full border transition-all ${
+          isSelected
+            ? "border-blue-500 bg-blue-500 opacity-100"
+            : "border-white/50 bg-black/20 opacity-0 backdrop-blur-sm group-hover:opacity-100"
+        }`}
+      >
+        {isSelected ? <Check size={14} className="text-white" strokeWidth={3} /> : null}
+      </div>
+
       <div className="relative aspect-square overflow-hidden">
         <img
           src={thumbnailUrl(item.path)}
@@ -61,14 +82,22 @@ export function StoredFileCard({
 
         <div className="flex gap-1.5">
           <button
-            onClick={onRestore}
+            onClick={(event) => {
+              event.stopPropagation();
+              onRestore();
+            }}
+            disabled={isPending}
             className="flex flex-1 items-center justify-center gap-1 rounded py-1.5 text-xs font-medium transition-colors"
             style={{ background: "var(--bg-2)", color: "var(--ink-2)" }}
           >
             <RotateCcw size={11} /> Restore
           </button>
           <button
-            onClick={onDelete}
+            onClick={(event) => {
+              event.stopPropagation();
+              onDelete();
+            }}
+            disabled={isPending}
             className="flex flex-1 items-center justify-center gap-1 rounded py-1.5 text-xs font-medium transition-colors"
             style={{ background: "var(--red-dim)", color: "var(--red)" }}
           >
@@ -76,6 +105,8 @@ export function StoredFileCard({
           </button>
         </div>
       </div>
+
+      {isPending ? <div className="absolute inset-0 bg-white/20 backdrop-blur-[1px]" /> : null}
     </div>
   );
 }

@@ -24,6 +24,13 @@ def restore_destination(stored_path: str, original_folder: str) -> Path:
     return Path(original_folder) / Path(stored_path).name
 
 
+def restore_original_destination(record: dict) -> Path:
+    original_path = record.get("original_path")
+    if original_path:
+        return Path(original_path)
+    return restore_destination(record["path"], record["folder"])
+
+
 def move_files_to_storage(file_ids: list[int], *, target: str) -> list[dict]:
     moved: list[dict] = []
     with get_db() as conn:
@@ -52,7 +59,7 @@ def restore_files_from_storage(file_ids: list[int]) -> list[dict]:
             if record is None:
                 continue
             src = Path(record["path"])
-            dst = restore_destination(record["path"], record["folder"])
+            dst = restore_original_destination(record)
             try:
                 dst.parent.mkdir(parents=True, exist_ok=True)
                 shutil.move(str(src), str(dst))

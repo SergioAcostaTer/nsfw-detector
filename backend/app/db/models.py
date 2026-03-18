@@ -4,6 +4,7 @@ def init_db(conn):
         CREATE TABLE IF NOT EXISTS files (
             id              INTEGER PRIMARY KEY,
             path            TEXT UNIQUE,
+            original_path   TEXT,
             size            INTEGER,
             mtime           INTEGER,
             hash            TEXT,
@@ -54,6 +55,12 @@ def init_db(conn):
     )
 
     file_columns = {row[1] for row in conn.execute("PRAGMA table_info(files)").fetchall()}
+    if "original_path" not in file_columns:
+        try:
+            conn.execute("ALTER TABLE files ADD COLUMN original_path TEXT")
+            conn.execute("UPDATE files SET original_path = path WHERE original_path IS NULL")
+        except Exception:
+            pass
     if "hash" in file_columns:
         conn.execute("CREATE INDEX IF NOT EXISTS idx_files_hash ON files(hash)")
     if "phash" in file_columns:

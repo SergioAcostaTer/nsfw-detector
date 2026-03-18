@@ -5,7 +5,7 @@ import cv2
 import numpy as np
 import onnxruntime as ort
 
-from app.config import CLASSIFIER_MODEL_PATH, CLASSIFIER_THRESHOLD
+from app.config import CLASSIFIER_MODEL_PATH, CLASSIFIER_SKIP_THRESHOLD, CLASSIFIER_THRESHOLD
 from app.settings import get_onnx_providers
 
 _classifier = None
@@ -106,3 +106,7 @@ def get_classifier() -> Classifier | None:
 
 def classifier_threshold() -> float:
     return CLASSIFIER_THRESHOLD
+
+
+def classifier_skip_threshold() -> float:
+    return CLASSIFIER_SKIP_THRESHOLD

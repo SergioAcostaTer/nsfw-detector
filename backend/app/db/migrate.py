@@ -4,6 +4,7 @@ import sqlite3
 def run_migrations(conn):
     existing_cols = [row[1] for row in conn.execute("PRAGMA table_info(files)").fetchall()]
     new_cols = {
+        "original_path": "TEXT",
         "folder": "TEXT",
         "status": "TEXT DEFAULT 'active'",
         "quarantined_at": "INTEGER",
@@ -20,6 +21,8 @@ def run_migrations(conn):
             continue
         try:
             conn.execute(f"ALTER TABLE files ADD COLUMN {col} {definition}")
+            if col == "original_path":
+                conn.execute("UPDATE files SET original_path = path WHERE original_path IS NULL")
         except sqlite3.OperationalError as exc:
             print(f"Migration error adding files.{col}: {exc}")
 

@@ -9,6 +9,7 @@ def persist_scan_results(conn, *, folder, records: list[dict]):
         [
             {
                 "path": str(record["entry"]["path"]),
+                "original_path": str(record["entry"]["path"]),
                 "size": record["entry"]["stat"].st_size,
                 "mtime": record["entry"]["stat"].st_mtime,
                 "hash": record["entry"]["hash"],

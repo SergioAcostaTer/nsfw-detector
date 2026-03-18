@@ -1,5 +1,5 @@
 from app.domain.scan.decision import decide
-from app.scanner.classifier import classifier_threshold, get_classifier
+from app.scanner.classifier import classifier_skip_threshold, get_classifier
 from app.scanner.detector import get_detector
 
 
@@ -17,9 +17,12 @@ def infer_image_batch(loaded_entries: list[tuple[dict, object]], *, explicit_thr
         try:
             classifier_scores = classifier.classify_batch(images)
             gatekeeper_entries = []
-            threshold = classifier_threshold()
+            skip_threshold = classifier_skip_threshold()
             for loaded_entry, score in zip(loaded_entries, classifier_scores):
-                if score > threshold:
+                # Soft gate:
+                # - ultra-safe images are marked safe immediately
+                # - uncertain and likely-NSFW images both go through the detector
+                if score >= skip_threshold:
                     gatekeeper_entries.append(loaded_entry)
                     continue
                 entry, _image = loaded_entry

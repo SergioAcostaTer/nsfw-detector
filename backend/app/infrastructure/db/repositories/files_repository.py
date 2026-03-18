@@ -12,17 +12,18 @@ class FilesRepository:
         return {
             "id": row[0],
             "path": row[1],
-            "status": row[2],
-            "mtime": row[3],
-            "fingerprint": row[4],
-            "hash": row[5],
-            "folder": row[6],
-            "quarantined_at": row[7],
-            "type": row[8],
-            "frame_count": row[9],
-            "duration": row[10],
-            "phash": row[11],
-            "vaulted_at": row[12],
+            "original_path": row[2],
+            "status": row[3],
+            "mtime": row[4],
+            "fingerprint": row[5],
+            "hash": row[6],
+            "folder": row[7],
+            "quarantined_at": row[8],
+            "type": row[9],
+            "frame_count": row[10],
+            "duration": row[11],
+            "phash": row[12],
+            "vaulted_at": row[13],
         }
 
     @staticmethod
@@ -30,15 +31,16 @@ class FilesRepository:
         return {
             "id": row[0],
             "path": row[1],
-            "folder": row[2],
-            "status": row[3],
-            "quarantined_at": row[4],
-            "hash": row[5],
-            "type": row[6],
-            "frame_count": row[7],
-            "duration": row[8],
-            "phash": row[9],
-            "vaulted_at": row[10],
+            "original_path": row[2],
+            "folder": row[3],
+            "status": row[4],
+            "quarantined_at": row[5],
+            "hash": row[6],
+            "type": row[7],
+            "frame_count": row[8],
+            "duration": row[9],
+            "phash": row[10],
+            "vaulted_at": row[11],
         }
 
     def get_existing_by_paths(self, paths: list[str]):
@@ -47,7 +49,7 @@ class FilesRepository:
         placeholders = ",".join("?" for _ in paths)
         rows = self.conn.execute(
             f"""
-            SELECT id, path, status, mtime, fingerprint, hash, folder, quarantined_at, type, frame_count, duration
+            SELECT id, path, original_path, status, mtime, fingerprint, hash, folder, quarantined_at, type, frame_count, duration
                  , phash, vaulted_at
             FROM files
             WHERE path IN ({placeholders})
@@ -59,7 +61,7 @@ class FilesRepository:
     def get_by_id(self, file_id: int):
         row = self.conn.execute(
             """
-            SELECT id, path, folder, status, quarantined_at, hash, type, frame_count, duration, phash, vaulted_at
+            SELECT id, path, original_path, folder, status, quarantined_at, hash, type, frame_count, duration, phash, vaulted_at
             FROM files
             WHERE id = ?
             """,
@@ -70,9 +72,10 @@ class FilesRepository:
     def upsert_many(self, records: list[dict]):
         self.conn.executemany(
             """
-            INSERT INTO files (path, size, mtime, hash, folder, status, last_scanned_at, quarantined_at, vaulted_at, deleted_at, type, frame_count, duration, fingerprint, phash)
-            VALUES (:path, :size, :mtime, :hash, :folder, 'active', :last_scanned_at, NULL, NULL, NULL, :type, :frame_count, :duration, :fingerprint, :phash)
+            INSERT INTO files (path, original_path, size, mtime, hash, folder, status, last_scanned_at, quarantined_at, vaulted_at, deleted_at, type, frame_count, duration, fingerprint, phash)
+            VALUES (:path, :original_path, :size, :mtime, :hash, :folder, 'active', :last_scanned_at, NULL, NULL, NULL, :type, :frame_count, :duration, :fingerprint, :phash)
             ON CONFLICT(path) DO UPDATE SET
+                original_path=excluded.original_path,
                 size=excluded.size,
                 mtime=excluded.mtime,
                 hash=excluded.hash,
@@ -103,20 +106,20 @@ class FilesRepository:
 
     def mark_quarantined(self, file_id: int, new_path: str, quarantined_at: int):
         self.conn.execute(
-            "UPDATE files SET status='quarantined', path=?, quarantined_at=?, vaulted_at=NULL WHERE id=?",
+            "UPDATE files SET status='quarantined', original_path=COALESCE(original_path, path), path=?, quarantined_at=?, vaulted_at=NULL WHERE id=?",
             (new_path, quarantined_at, file_id),
         )
 
     def mark_vaulted(self, file_id: int, new_path: str, vaulted_at: int):
         self.conn.execute(
-            "UPDATE files SET status='vaulted', path=?, vaulted_at=?, quarantined_at=NULL WHERE id=?",
+            "UPDATE files SET status='vaulted', original_path=COALESCE(original_path, path), path=?, vaulted_at=?, quarantined_at=NULL WHERE id=?",
             (new_path, vaulted_at, file_id),
         )
 
     def mark_restored(self, file_id: int, restored_path: str):
         self.conn.execute(
-            "UPDATE files SET status='active', path=?, quarantined_at=NULL, vaulted_at=NULL WHERE id=?",
-            (restored_path, file_id),
+            "UPDATE files SET status='active', path=?, original_path=?, quarantined_at=NULL, vaulted_at=NULL WHERE id=?",
+            (restored_path, restored_path, file_id),
         )
 
     def mark_deleted(self, file_id: int, deleted_at: int):
